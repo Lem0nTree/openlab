@@ -15,4 +15,4 @@ lint:
 	cd web && pnpm lint && pnpm typecheck
 
 compose:
-	docker compose --env-file .env -f deploy/compose.yml up --build
+	sh deploy/up.sh --build
