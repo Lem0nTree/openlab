@@ -20,10 +20,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.19.0
       - uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: pnpm
           cache-dependency-path: web/pnpm-lock.yaml
-      - run: corepack enable
       - run: cd web && pnpm install --frozen-lockfile && pnpm generate:api && git diff --exit-code -- ../openapi.json src/lib/openapi.d.ts && pnpm typecheck && pnpm build && pnpm test
