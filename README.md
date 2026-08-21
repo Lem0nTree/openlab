@@ -13,14 +13,14 @@ OpenLab is a local-first inventory and build workspace for an electronics lab.
 2. Start the stack.
 
    ```powershell
-   docker compose -f deploy/compose.yml up --build
+   docker compose --env-file .env -f deploy/compose.yml up --build
    ```
 
 3. Open `http://localhost:3000`, copy the one-time setup token printed by
    `openlab-server`, then create the owner account.
 
 The Compose stack includes PostgreSQL/pgvector, FastAPI, the PostgreSQL worker,
-and the Next.js web app. Stop it with `docker compose -f deploy/compose.yml down`.
+and the Next.js web app. Stop it with `docker compose --env-file .env -f deploy/compose.yml down`.
 Your database and attachment volumes are retained.
 
 ## Configure Smart Inbox
