@@ -6,7 +6,6 @@ Revises: 0002_allocation_idempotency
 
 from alembic import op
 
-
 revision = "0003_smart_inbox_provider"
 down_revision = "0002_allocation_idempotency"
 branch_labels = None

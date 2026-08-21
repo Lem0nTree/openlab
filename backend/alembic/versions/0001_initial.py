@@ -3,10 +3,9 @@
 Revision ID: 0001_initial
 """
 
-from alembic import op
-
-from openlab.db import Base
 import openlab.models  # noqa: F401
+from alembic import op
+from openlab.db import Base
 
 revision = "0001_initial"
 down_revision = None
