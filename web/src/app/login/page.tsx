@@ -1,6 +1,6 @@
 import { LoginForm } from "@/components/login-form";
 
-export default function LoginPage() {
-  return <LoginForm />;
+export default async function LoginPage({ searchParams }: { searchParams: Promise<{ created?: string }> }) {
+  const { created } = await searchParams;
+  return <LoginForm created={created === "1"} />;
 }
-
