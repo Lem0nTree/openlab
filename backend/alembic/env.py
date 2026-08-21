@@ -1,10 +1,9 @@
 from logging.config import fileConfig
 
+import openlab.models  # noqa: F401
 from alembic import context
-
 from openlab.config import get_settings
 from openlab.db import Base
-import openlab.models  # noqa: F401
 
 config = context.config
 config.set_main_option("sqlalchemy.url", get_settings().database_url)
@@ -35,4 +34,3 @@ if context.is_offline_mode():
     run_migrations_offline()
 else:
     run_migrations_online()
-

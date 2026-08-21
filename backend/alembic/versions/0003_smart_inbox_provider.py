@@ -5,9 +5,6 @@ Revises: 0002_allocation_idempotency
 """
 
 from alembic import op
-import sqlalchemy as sa
-from sqlalchemy.dialects import postgresql
-
 
 revision = "0003_smart_inbox_provider"
 down_revision = "0002_allocation_idempotency"
@@ -16,17 +13,36 @@ depends_on = None
 
 
 def upgrade() -> None:
-    op.add_column(
-        "inbox_items",
-        sa.Column(
-            "processing_evidence",
-            postgresql.JSONB(astext_type=sa.Text()),
-            nullable=False,
-            server_default=sa.text("'{}'::jsonb"),
-        ),
+    op.execute(
+        """
+        DO $$ BEGIN
+          IF NOT EXISTS (
+            SELECT 1 FROM information_schema.columns
+            WHERE table_name = 'inbox_items' AND column_name = 'processing_evidence'
+          ) THEN
+            ALTER TABLE inbox_items ADD COLUMN processing_evidence JSONB NOT NULL DEFAULT '{}'::jsonb;
+          END IF;
+        END $$;
+        """
     )
-    op.add_column("provider_configs", sa.Column("base_url", sa.String(length=600), nullable=True))
-    op.add_column("provider_configs", sa.Column("model", sa.String(length=300), nullable=True))
+    op.execute(
+        """
+        DO $$ BEGIN
+          IF NOT EXISTS (
+            SELECT 1 FROM information_schema.columns
+            WHERE table_name = 'provider_configs' AND column_name = 'base_url'
+          ) THEN
+            ALTER TABLE provider_configs ADD COLUMN base_url VARCHAR(600);
+          END IF;
+          IF NOT EXISTS (
+            SELECT 1 FROM information_schema.columns
+            WHERE table_name = 'provider_configs' AND column_name = 'model'
+          ) THEN
+            ALTER TABLE provider_configs ADD COLUMN model VARCHAR(300);
+          END IF;
+        END $$;
+        """
+    )
     op.execute("UPDATE provider_configs SET base_url = 'http://localhost:11434/v1' WHERE base_url IS NULL")
     op.execute("UPDATE provider_configs SET model = 'llama3.2' WHERE model IS NULL")
     op.alter_column("provider_configs", "base_url", nullable=False)
