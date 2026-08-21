@@ -1,0 +1,75 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg17
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-openlab}
+      POSTGRES_USER: ${POSTGRES_USER:-openlab}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+    volumes:
+      - openlab-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  openlab-server:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.backend
+    command: ["/bin/sh", "-c", "alembic upgrade head && uvicorn openlab.main:app --host 0.0.0.0 --port 8000 --workers 1"]
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?set DATABASE_URL}
+      OPENLAB_DATA_DIR: /var/lib/openlab
+      OPENLAB_SECRET_KEY: ${OPENLAB_SECRET_KEY:?set OPENLAB_SECRET_KEY}
+      OPENLAB_ENCRYPTION_KEY: ${OPENLAB_ENCRYPTION_KEY:-}
+      OPENLAB_SETUP_TOKEN: ${OPENLAB_SETUP_TOKEN:-}
+    volumes:
+      - openlab-data:/var/lib/openlab
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped
+
+  openlab-worker:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.backend
+    command: ["python", "-m", "openlab.worker"]
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?set DATABASE_URL}
+      OPENLAB_DATA_DIR: /var/lib/openlab
+      OPENLAB_SECRET_KEY: ${OPENLAB_SECRET_KEY:?set OPENLAB_SECRET_KEY}
+      OPENLAB_ENCRYPTION_KEY: ${OPENLAB_ENCRYPTION_KEY:-}
+    volumes:
+      - openlab-data:/var/lib/openlab
+    depends_on:
+      postgres:
+        condition: service_healthy
+      openlab-server:
+        condition: service_started
+    restart: unless-stopped
+
+  openlab-web:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.web
+    environment:
+      OPENLAB_API_INTERNAL_URL: http://openlab-server:8000
+    depends_on:
+      openlab-server:
+        condition: service_healthy
+    ports:
+      - "3000:3000"
+    restart: unless-stopped
+
+volumes:
+  openlab-postgres:
+  openlab-data:
+

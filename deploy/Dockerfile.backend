@@ -1,0 +1,14 @@
+FROM python:3.13-slim AS base
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
+WORKDIR /app
+RUN pip install --no-cache-dir uv==0.6.3
+COPY backend/pyproject.toml backend/README.md ./
+RUN uv sync --no-dev --no-install-project
+COPY backend/ ./
+RUN uv sync --no-dev
+ENV PATH="/app/.venv/bin:$PATH" PYTHONPATH=/app/src
+RUN useradd --system --uid 10001 openlab && mkdir -p /var/lib/openlab && chown -R openlab:openlab /app /var/lib/openlab
+USER openlab
+EXPOSE 8000
+CMD ["uvicorn", "openlab.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]
+

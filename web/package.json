@@ -1,0 +1,30 @@
+{
+  "name": "openlab-web",
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "generate:api": "openapi-typescript ../openapi.json -o src/lib/openapi.d.ts"
+  },
+  "dependencies": {
+    "next": "16.1.1",
+    "react": "19.2.3",
+    "react-dom": "19.2.3"
+  },
+  "devDependencies": {
+    "@types/node": "24.10.1",
+    "@types/react": "19.2.7",
+    "@types/react-dom": "19.2.3",
+    "eslint": "9.39.1",
+    "eslint-config-next": "16.1.1",
+    "openapi-typescript": "7.10.1",
+    "typescript": "5.9.3",
+    "vitest": "4.0.16"
+  },
+  "packageManager": "pnpm@11.19.0"
+}
