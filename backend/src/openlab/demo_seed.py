@@ -168,6 +168,8 @@ def seed_common_modules(lab_id: str | None = None, quantity: Decimal = Decimal(3
             thing = by_key.get(module.key)
             if not thing:
                 thing = create_thing(db, user, name=module.name, category=module.category, manufacturer=None, mpn=None, metadata={"description": module.description, "demo_seed_key": module.key, "demo_seed_version": SEED_VERSION}, aliases=module.aliases)
+                # create_thing queues aliases; flush them before comparing persisted values.
+                db.flush()
                 created += 1
             else:
                 reused += 1
