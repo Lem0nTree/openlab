@@ -1,58 +1,82 @@
 import logging
+import re
+from collections.abc import Callable
 from datetime import UTC, datetime
 from hashlib import sha256
 from http import HTTPStatus
 from io import BytesIO
 from secrets import token_urlsafe
 
-import qrcode
+import qrcode  # type: ignore[import-untyped]
 from argon2.exceptions import VerifyMismatchError
-from fastapi import Depends, FastAPI, Header, HTTPException, Response, UploadFile
+from fastapi import Depends, FastAPI, Header, HTTPException, Request, Response, UploadFile
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from fastapi.responses import Response as FastAPIResponse
-from qrcode.image.svg import SvgPathImage
+from qrcode.image.svg import SvgPathImage  # type: ignore[import-untyped]
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from .config import get_settings
 from .db import get_db
+from .intelligence import accept_build_plan, queue_thing_embedding, search_inventory
 from .models import (
     Allocation,
+    Capability,
     InboxCandidate,
     InboxItem,
     Job,
     Lab,
     Location,
     Membership,
+    Pin,
     Project,
     ProviderConfig,
     Requirement,
     SessionToken,
     StockBalance,
+    StockMovement,
     TechnicalFact,
     Thing,
     ThingAlias,
+    ThingInterface,
     User,
 )
-from .providers import ProviderError, encrypt_secret, is_local_endpoint
+from .providers import (
+    OpenAICompatibleProvider,
+    ProviderError,
+    decrypt_secret,
+    encrypt_secret,
+    is_local_endpoint,
+)
 from .schemas import (
     AIAnswer,
     AIQuery,
     AllocationCreate,
     AllocationRecover,
     BalanceOut,
+    BuildPlanAccept,
+    BuildPlanRequest,
     CompatibilityRequest,
     CompatibilityResult,
     FactCreate,
+    InboxCandidateBatchConfirm,
+    InboxCandidateConfirm,
+    InboxCandidateInput,
     InboxCandidateOut,
+    InboxCandidateReceive,
     InboxCapture,
-    InboxConfirm,
+    InboxEnrichURL,
     InboxOut,
+    JobOut,
+    KnowledgeSearchRequest,
+    KnowledgeSearchResult,
     LabOut,
     LocationCreate,
     LocationOut,
     LoginRequest,
+    PinOut,
+    PinoutReplace,
     ProjectCreate,
     ProjectDetailOut,
     ProjectOut,
@@ -60,14 +84,18 @@ from .schemas import (
     ProviderConfigOut,
     ProviderModelsOut,
     RequirementCreate,
+    SchematicAccept,
+    SchematicRequest,
     SetupRequest,
     StockMovementOut,
     StockMutation,
     ThingCreate,
+    ThingKnowledgeReplace,
     ThingOut,
     ThingPatch,
     UserOut,
 )
+from .schematics import accept_schematic, export_kicad_schematic
 from .security import create_session, current_user, hasher, require_csrf
 from .services import (
     active_provider,
@@ -76,9 +104,11 @@ from .services import (
     available_quantity,
     compatible_things,
     create_thing,
+    enrich_product_url,
     get_lab_location,
     get_lab_thing,
     lab_for_user,
+    refresh_inbox_status,
     save_upload,
 )
 
@@ -104,12 +134,12 @@ def problem(code: int, title: str, detail: str) -> JSONResponse:
 
 
 @app.exception_handler(HTTPException)
-async def http_exception_handler(_, exc: HTTPException) -> JSONResponse:
+async def http_exception_handler(_: Request, exc: HTTPException) -> JSONResponse:
     return problem(exc.status_code, HTTPStatus(exc.status_code).phrase, str(exc.detail))
 
 
 @app.exception_handler(RequestValidationError)
-async def validation_exception_handler(_, exc: RequestValidationError) -> JSONResponse:
+async def validation_exception_handler(_: Request, exc: RequestValidationError) -> JSONResponse:
     return problem(422, "Validation failed", str(exc.errors()))
 
 
@@ -131,7 +161,9 @@ def provider_out(config: ProviderConfig) -> dict[str, object]:
         "provider": config.provider,
         "base_url": config.base_url,
         "model": config.model,
+        "embedding_model": config.embedding_model,
         "enabled": config.enabled,
+        "embeddings_enabled": config.embeddings_enabled,
         "has_api_key": config.secret_ciphertext is not None,
         "egress": "local" if is_local_endpoint(config.base_url) else "external",
     }
@@ -213,7 +245,10 @@ def me(user: User = Depends(current_user)) -> User:
 
 @app.get("/api/v1/lab", response_model=LabOut)
 def lab(user: User = Depends(current_user), db: Session = Depends(get_db)) -> Lab:
-    return db.get(Lab, lab_for_user(db, user))
+    value = db.get(Lab, lab_for_user(db, user))
+    if value is None:
+        raise HTTPException(status_code=404, detail="Lab not found")
+    return value
 
 
 @app.get("/api/v1/ai/provider", response_model=ProviderConfigOut | None)
@@ -238,6 +273,10 @@ def save_provider_config(
 ) -> dict[str, object]:
     if not payload.base_url.startswith(("http://", "https://")):
         raise HTTPException(status_code=422, detail="Provider endpoint must use http or https")
+    if payload.embeddings_enabled and not payload.embedding_model:
+        raise HTTPException(
+            status_code=422, detail="Choose an embedding model before enabling semantic retrieval"
+        )
     lab_id = lab_for_user(db, user)
     config = db.scalar(
         select(ProviderConfig)
@@ -250,22 +289,33 @@ def save_provider_config(
             provider="openai-compatible",
             base_url=payload.base_url.rstrip("/"),
             model=payload.model,
+            embedding_model=payload.embedding_model,
             capabilities={"chat": True, "vision": "model-dependent", "audio": "endpoint-dependent"},
             enabled=payload.enabled,
+            embeddings_enabled=payload.embeddings_enabled,
         )
         db.add(config)
     else:
         config.base_url = payload.base_url.rstrip("/")
         config.model = payload.model
+        config.embedding_model = payload.embedding_model
         config.enabled = payload.enabled
+        config.embeddings_enabled = payload.embeddings_enabled
     if payload.api_key is not None:
         try:
             config.secret_ciphertext = (
-                encrypt_secret(payload.api_key, settings.encryption_key) if payload.api_key else None
+                encrypt_secret(payload.api_key, settings.encryption_key)
+                if payload.api_key
+                else None
             )
         except ProviderError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
     db.flush()
+    if config.embeddings_enabled and config.embedding_model:
+        for thing_id in db.scalars(
+            select(Thing.id).where(Thing.lab_id == lab_id, Thing.archived_at.is_(None))
+        ).all():
+            queue_thing_embedding(db, lab_id, thing_id)
     audit(db, user, "ai.provider_configured", "provider_config", config.id, enabled=config.enabled)
     db.commit()
     return provider_out(config)
@@ -276,9 +326,18 @@ def provider_models(
     user: User = Depends(require_owner), db: Session = Depends(get_db)
 ) -> dict[str, object]:
     try:
-        provider, config = active_provider(db, lab_for_user(db, user))
-        if not provider or not config:
-            raise HTTPException(status_code=409, detail="Enable and save an AI provider first")
+        config = db.scalar(
+            select(ProviderConfig)
+            .where(ProviderConfig.lab_id == lab_for_user(db, user))
+            .order_by(ProviderConfig.updated_at.desc())
+        )
+        if not config:
+            raise HTTPException(status_code=409, detail="Save an AI provider first")
+        provider = OpenAICompatibleProvider(
+            base_url=config.base_url,
+            model=config.model,
+            api_key=decrypt_secret(config.secret_ciphertext, settings.encryption_key),
+        )
         return {
             "models": provider.list_models(),
             "egress": "local" if is_local_endpoint(config.base_url) else "external",
@@ -322,6 +381,7 @@ def add_thing(
         metadata=payload.metadata,
         aliases=payload.aliases,
     )
+    queue_thing_embedding(db, item.lab_id, item.id)
     db.commit()
     return item
 
@@ -348,6 +408,7 @@ def patch_thing(
     for field, value in payload.model_dump(exclude={"revision"}, exclude_unset=True).items():
         setattr(item, "metadata_json" if field == "metadata" else field, value)
     item.revision += 1
+    queue_thing_embedding(db, item.lab_id, item.id)
     audit(db, user, "thing.updated", "thing", item.id)
     db.commit()
     return item
@@ -411,7 +472,9 @@ def lookup_location(
 
 
 @app.get("/api/v1/locations/{location_id}/qr.svg", response_class=FastAPIResponse)
-def location_qr(location_id: str, user: User = Depends(current_user), db: Session = Depends(get_db)) -> FastAPIResponse:
+def location_qr(
+    location_id: str, user: User = Depends(current_user), db: Session = Depends(get_db)
+) -> FastAPIResponse:
     location = get_lab_location(db, user, location_id)
     output = BytesIO()
     qrcode.make(
@@ -433,13 +496,13 @@ def balances(
     )
 
 
-def stock_endpoint(kind: str):
+def stock_endpoint(kind: str) -> Callable[..., StockMovement]:
     def endpoint(
         payload: StockMutation,
         idempotency_key: str = Depends(require_idempotency),
         user: User = Depends(current_user),
         db: Session = Depends(get_db),
-    ) -> StockMovementOut:
+    ) -> StockMovement:
         if kind == "receive" and not payload.to_location_id:
             raise HTTPException(status_code=422, detail="Receiving stock needs a destination")
         if kind == "move" and (not payload.from_location_id or not payload.to_location_id):
@@ -548,6 +611,8 @@ def get_project(
         "name": project.name,
         "description": project.description,
         "status": project.status,
+        "revision": project.revision,
+        "design_json": project.design_json,
         "requirements": list(
             db.scalars(select(Requirement).where(Requirement.project_id == project.id)).all()
         ),
@@ -579,7 +644,9 @@ async def upload_inbox_attachment(
 
 
 @app.post(
-    "/api/v1/inbox/{inbox_id}/process", response_model=InboxOut, status_code=202,
+    "/api/v1/inbox/{inbox_id}/process",
+    response_model=InboxOut,
+    status_code=202,
     dependencies=[Depends(require_csrf)],
 )
 def process_inbox(
@@ -592,7 +659,7 @@ def process_inbox(
     )
     if not item:
         raise HTTPException(status_code=404, detail="Inbox item not found")
-    if item.status in {"committed", "confirmed", "cancelled"}:
+    if item.status in {"committed", "cancelled"}:
         raise HTTPException(status_code=409, detail="This Inbox item cannot be processed again")
     item.status = "queued"
     item.error = None
@@ -603,19 +670,9 @@ def process_inbox(
     return item
 
 
-@app.post(
-    "/api/v1/inbox/{inbox_id}/confirm",
-    response_model=StockMovementOut,
-    status_code=201,
-    dependencies=[Depends(require_csrf)],
-)
-def confirm_inbox(
-    inbox_id: str,
-    payload: InboxConfirm,
-    idempotency_key: str = Depends(require_idempotency),
-    user: User = Depends(current_user),
-    db: Session = Depends(get_db),
-) -> StockMovementOut:
+def inbox_candidate_for_user(
+    db: Session, user: User, inbox_id: str, candidate_id: str
+) -> tuple[InboxItem, InboxCandidate]:
     item = db.scalar(
         select(InboxItem).where(
             InboxItem.id == inbox_id, InboxItem.lab_id == lab_for_user(db, user)
@@ -623,37 +680,259 @@ def confirm_inbox(
     )
     if not item:
         raise HTTPException(status_code=404, detail="Inbox item not found")
-    if item.status == "committed":
-        raise HTTPException(status_code=409, detail="Inbox item was already committed")
+    candidate = db.scalar(
+        select(InboxCandidate).where(
+            InboxCandidate.id == candidate_id, InboxCandidate.inbox_item_id == item.id
+        )
+    )
+    if not candidate:
+        raise HTTPException(status_code=404, detail="Inbox candidate not found")
+    return item, candidate
+
+
+def confirm_candidate_identity(
+    db: Session,
+    user: User,
+    item: InboxItem,
+    candidate: InboxCandidate,
+    payload: InboxCandidateConfirm,
+) -> InboxCandidate:
+    if candidate.status == "ignored":
+        raise HTTPException(status_code=409, detail="Ignored candidates cannot be confirmed")
+    supplied_values = any(
+        value is not None
+        for value in (
+            payload.name,
+            payload.description,
+            payload.quantity,
+            payload.category,
+            payload.existing_thing_id,
+        )
+    )
+    if candidate.status in {"confirmed", "received"}:
+        if not supplied_values:
+            return candidate
+        raise HTTPException(
+            status_code=409,
+            detail="This candidate is already confirmed; edit the inventory item instead",
+        )
+    if (
+        candidate.status == "proposed"
+        and candidate.identity_confidence == "unresolved"
+        and not candidate.product_url
+    ):
+        raise HTTPException(
+            status_code=409,
+            detail="Unable to parse this item; provide a product link before confirmation",
+        )
+    if payload.name is not None:
+        candidate.name = payload.name
+    if payload.quantity is not None:
+        candidate.quantity = payload.quantity
+    if payload.category is not None:
+        candidate.category = payload.category
+    provenance = dict(candidate.provenance)
+    if "description" in payload.model_fields_set:
+        if payload.description is None:
+            provenance.pop("description", None)
+        else:
+            provenance["description"] = payload.description
+        candidate.provenance = provenance
+    description = provenance.get("description")
     thing = (
         get_lab_thing(db, user, payload.existing_thing_id)
         if payload.existing_thing_id
         else create_thing(
             db,
             user,
-            name=payload.candidate.name,
-            category=payload.candidate.category,
+            name=candidate.name,
+            category=candidate.category,
             manufacturer=None,
             mpn=None,
-            metadata={},
+            metadata={"description": description} if isinstance(description, str) else {},
             aliases=[],
         )
     )
-    item.status = "confirmed"
+    candidate.thing_id = thing.id
+    candidate.status = "confirmed"
+    queue_thing_embedding(db, thing.lab_id, thing.id)
+    refresh_inbox_status(db, item)
+    audit(db, user, "inbox.candidate_confirmed", "inbox_candidate", candidate.id, thing_id=thing.id)
+    return candidate
+
+
+@app.post(
+    "/api/v1/inbox/{inbox_id}/candidates/{candidate_id}/confirm",
+    response_model=InboxCandidateOut,
+    dependencies=[Depends(require_csrf)],
+)
+def confirm_inbox_candidate(
+    inbox_id: str,
+    candidate_id: str,
+    payload: InboxCandidateConfirm,
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+) -> InboxCandidate:
+    item, candidate = inbox_candidate_for_user(db, user, inbox_id, candidate_id)
+    result = confirm_candidate_identity(db, user, item, candidate, payload)
+    db.commit()
+    return result
+
+
+@app.post(
+    "/api/v1/inbox/{inbox_id}/confirm-batch",
+    response_model=list[InboxCandidateOut],
+    dependencies=[Depends(require_csrf)],
+)
+def confirm_inbox_batch(
+    inbox_id: str,
+    payload: InboxCandidateBatchConfirm,
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+) -> list[InboxCandidate]:
+    item = db.scalar(
+        select(InboxItem).where(
+            InboxItem.id == inbox_id, InboxItem.lab_id == lab_for_user(db, user)
+        )
+    )
+    if not item:
+        raise HTTPException(status_code=404, detail="Inbox item not found")
+    candidates = list(
+        db.scalars(
+            select(InboxCandidate).where(
+                InboxCandidate.inbox_item_id == item.id,
+                InboxCandidate.id.in_(payload.candidate_ids),
+            )
+        ).all()
+    )
+    if len(candidates) != len(set(payload.candidate_ids)):
+        raise HTTPException(status_code=404, detail="One or more Inbox candidates were not found")
+    for candidate in candidates:
+        confirm_candidate_identity(db, user, item, candidate, InboxCandidateConfirm())
+    db.commit()
+    return candidates
+
+
+@app.post(
+    "/api/v1/inbox/{inbox_id}/candidates/{candidate_id}/ignore",
+    response_model=InboxCandidateOut,
+    dependencies=[Depends(require_csrf)],
+)
+def ignore_inbox_candidate(
+    inbox_id: str,
+    candidate_id: str,
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+) -> InboxCandidate:
+    item, candidate = inbox_candidate_for_user(db, user, inbox_id, candidate_id)
+    if candidate.status == "received":
+        raise HTTPException(status_code=409, detail="Received candidates cannot be ignored")
+    candidate.status = "ignored"
+    refresh_inbox_status(db, item)
+    audit(db, user, "inbox.candidate_ignored", "inbox_candidate", candidate.id)
+    db.commit()
+    return candidate
+
+
+@app.post(
+    "/api/v1/inbox/{inbox_id}/candidates/{candidate_id}/receive",
+    response_model=StockMovementOut,
+    status_code=201,
+    dependencies=[Depends(require_csrf)],
+)
+def receive_inbox_candidate(
+    inbox_id: str,
+    candidate_id: str,
+    payload: InboxCandidateReceive,
+    idempotency_key: str = Depends(require_idempotency),
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+) -> StockMovement:
+    item, candidate = inbox_candidate_for_user(db, user, inbox_id, candidate_id)
+    if candidate.status not in {"confirmed", "received"} or not candidate.thing_id:
+        raise HTTPException(
+            status_code=409, detail="Confirm this candidate's identity before receiving it"
+        )
+    quantity = payload.quantity or candidate.quantity
     movement = apply_movement(
         db,
         user,
-        thing_id=thing.id,
-        quantity=payload.candidate.quantity,
+        thing_id=candidate.thing_id,
+        quantity=quantity,
         movement_type="receive",
         idempotency_key=idempotency_key,
         to_location_id=payload.location_id,
-        note=f"Inbox {item.id}",
+        note=f"Inbox {item.id} candidate {candidate.id}",
     )
-    item.status = "committed"
-    audit(db, user, "inbox.committed", "inbox_item", item.id, thing_id=thing.id)
+    candidate.status = "received"
+    refresh_inbox_status(db, item)
+    audit(
+        db,
+        user,
+        "inbox.candidate_received",
+        "inbox_candidate",
+        candidate.id,
+        thing_id=candidate.thing_id,
+    )
     db.commit()
     return movement
+
+
+@app.post(
+    "/api/v1/inbox/{inbox_id}/candidates/{candidate_id}/enrich-url",
+    response_model=InboxCandidateOut,
+    dependencies=[Depends(require_csrf)],
+)
+def enrich_inbox_candidate_url(
+    inbox_id: str,
+    candidate_id: str,
+    payload: InboxEnrichURL,
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+) -> InboxCandidate:
+    item, candidate = inbox_candidate_for_user(db, user, inbox_id, candidate_id)
+    if candidate.status != "proposed":
+        raise HTTPException(status_code=409, detail="This candidate cannot be enriched")
+    result = enrich_product_url(payload.url)
+    candidate.product_url = str(result["normalized_url"])
+    provenance = dict(candidate.provenance)
+    provenance["product_link"] = result
+    candidate.provenance = provenance
+    proposal = result.get("proposal", {})
+    if isinstance(proposal, dict):
+        page_text = "\n".join(
+            str(value) for value in (proposal.get("name"), proposal.get("description")) if value
+        )
+        provider, config = active_provider(db, item.lab_id)
+        if provider and page_text:
+            try:
+                raw = provider.extract_inbox(page_text)
+                values = raw.get("candidates", [])
+                if not isinstance(values, list) or not values:
+                    raise ValueError("candidates is empty")
+                normalized = InboxCandidateInput.model_validate(values[0])
+            except (ProviderError, ValueError) as first_error:
+                try:
+                    repaired = provider.extract_inbox(
+                        page_text, repair_error=str(first_error)[:1200]
+                    )
+                    values = repaired.get("candidates", [])
+                    if not isinstance(values, list) or not values:
+                        raise ValueError("candidates is empty")
+                    normalized = InboxCandidateInput.model_validate(values[0])
+                except (ProviderError, ValueError):
+                    normalized = None
+            if normalized:
+                candidate.name = normalized.name
+                candidate.category = normalized.category
+                candidate.identity_confidence = normalized.identity_confidence
+                provenance["description"] = normalized.description
+                provenance["observations"] = normalized.observations
+                provenance["product_link_model"] = config.model if config else None
+                candidate.provenance = provenance
+    audit(db, user, "inbox.candidate_enriched", "inbox_candidate", candidate.id)
+    db.commit()
+    return candidate
 
 
 @app.get("/api/v1/projects", response_model=list[ProjectOut])
@@ -706,6 +985,7 @@ def add_requirement(
         raise HTTPException(status_code=404, detail="Project not found")
     item = Requirement(project_id=project.id, **payload.model_dump())
     db.add(item)
+    project.revision += 1
     db.commit()
     return {"id": item.id}
 
@@ -776,7 +1056,7 @@ def recover_project_stock(
     idempotency_key: str = Depends(require_idempotency),
     user: User = Depends(current_user),
     db: Session = Depends(get_db),
-) -> StockMovementOut:
+) -> StockMovement:
     allocation = db.scalar(
         select(Allocation)
         .join(Project)
@@ -819,6 +1099,9 @@ def add_fact(
     get_lab_thing(db, user, thing_id)
     item = TechnicalFact(thing_id=thing_id, **payload.model_dump())
     db.add(item)
+    thing = get_lab_thing(db, user, thing_id)
+    thing.revision += 1
+    queue_thing_embedding(db, thing.lab_id, thing.id)
     db.commit()
     return {"id": item.id}
 
@@ -832,9 +1115,282 @@ def compatible(
     )
 
 
+@app.post("/api/v1/knowledge/search", response_model=list[KnowledgeSearchResult])
+def knowledge_search(
+    payload: KnowledgeSearchRequest,
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+) -> list[dict[str, object]]:
+    return search_inventory(db, lab_for_user(db, user), payload.query, payload.limit)
+
+
+@app.put(
+    "/api/v1/things/{thing_id}/knowledge",
+    dependencies=[Depends(require_csrf)],
+)
+def replace_thing_knowledge(
+    thing_id: str,
+    payload: ThingKnowledgeReplace,
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+) -> dict[str, object]:
+    thing = get_lab_thing(db, user, thing_id)
+    for capability in db.scalars(select(Capability).where(Capability.thing_id == thing.id)).all():
+        db.delete(capability)
+    for interface in db.scalars(
+        select(ThingInterface).where(ThingInterface.thing_id == thing.id)
+    ).all():
+        db.delete(interface)
+    db.flush()
+    capabilities = sorted({value.strip() for value in payload.capabilities if value.strip()})
+    db.add_all([Capability(thing_id=thing.id, value=value) for value in capabilities])
+    db.add_all(
+        [ThingInterface(thing_id=thing.id, **value.model_dump()) for value in payload.interfaces]
+    )
+    thing.revision += 1
+    queue_thing_embedding(db, thing.lab_id, thing.id)
+    audit(
+        db,
+        user,
+        "thing.knowledge_replaced",
+        "thing",
+        thing.id,
+        capability_count=len(capabilities),
+        interface_count=len(payload.interfaces),
+    )
+    db.commit()
+    return {
+        "capabilities": capabilities,
+        "interfaces": [value.model_dump() for value in payload.interfaces],
+    }
+
+
+@app.get("/api/v1/jobs/{job_id}", response_model=JobOut)
+def get_job(job_id: str, user: User = Depends(current_user), db: Session = Depends(get_db)) -> Job:
+    job = db.scalar(select(Job).where(Job.id == job_id, Job.lab_id == lab_for_user(db, user)))
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    return job
+
+
+@app.post(
+    "/api/v1/projects/{project_id}/plan",
+    response_model=JobOut,
+    status_code=202,
+    dependencies=[Depends(require_csrf)],
+)
+def queue_build_plan(
+    project_id: str,
+    payload: BuildPlanRequest,
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+) -> Job:
+    project = db.scalar(
+        select(Project).where(Project.id == project_id, Project.lab_id == lab_for_user(db, user))
+    )
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    pending = db.scalars(
+        select(Job).where(
+            Job.lab_id == project.lab_id,
+            Job.kind == "project.plan",
+            Job.status.in_(["queued", "running"]),
+        )
+    ).all()
+    for job in pending:
+        if str(job.payload.get("project_id", "")) == project.id:
+            return job
+    job = Job(
+        lab_id=project.lab_id,
+        kind="project.plan",
+        payload={"project_id": project.id, "goal": payload.goal},
+    )
+    db.add(job)
+    db.flush()
+    audit(db, user, "project.plan_queued", "project", project.id, job_id=job.id)
+    db.commit()
+    return job
+
+
+@app.post(
+    "/api/v1/projects/{project_id}/plan/accept",
+    response_model=ProjectDetailOut,
+    dependencies=[Depends(require_csrf)],
+)
+def accept_project_plan(
+    project_id: str,
+    payload: BuildPlanAccept,
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+) -> dict[str, object]:
+    lab_id = lab_for_user(db, user)
+    project = db.scalar(
+        select(Project)
+        .where(Project.id == project_id, Project.lab_id == lab_id)
+        .with_for_update(of=Project)
+    )
+    job = db.scalar(select(Job).where(Job.id == payload.job_id, Job.lab_id == lab_id))
+    if not project or not job:
+        raise HTTPException(status_code=404, detail="Project or BUILD proposal not found")
+    try:
+        accept_build_plan(db, project, job, payload.solution_id, payload.revision)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    audit(
+        db,
+        user,
+        "project.plan_accepted",
+        "project",
+        project.id,
+        job_id=job.id,
+        solution_id=payload.solution_id,
+    )
+    db.commit()
+    return get_project(project.id, user, db)
+
+
+@app.get("/api/v1/things/{thing_id}/pins", response_model=list[PinOut])
+def get_pinout(
+    thing_id: str, user: User = Depends(current_user), db: Session = Depends(get_db)
+) -> list[Pin]:
+    get_lab_thing(db, user, thing_id)
+    return list(db.scalars(select(Pin).where(Pin.thing_id == thing_id).order_by(Pin.number)).all())
+
+
+@app.put(
+    "/api/v1/things/{thing_id}/pins",
+    response_model=list[PinOut],
+    dependencies=[Depends(require_csrf)],
+)
+def replace_pinout(
+    thing_id: str,
+    payload: PinoutReplace,
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+) -> list[Pin]:
+    thing = get_lab_thing(db, user, thing_id)
+    for pin in db.scalars(select(Pin).where(Pin.thing_id == thing.id)).all():
+        db.delete(pin)
+    db.flush()
+    pins = [Pin(thing_id=thing.id, **value.model_dump()) for value in payload.pins]
+    db.add_all(pins)
+    thing.revision += 1
+    audit(db, user, "thing.pinout_replaced", "thing", thing.id, pin_count=len(pins))
+    db.commit()
+    return pins
+
+
+@app.post(
+    "/api/v1/projects/{project_id}/schematic",
+    response_model=JobOut,
+    status_code=202,
+    dependencies=[Depends(require_csrf)],
+)
+def queue_schematic(
+    project_id: str,
+    payload: SchematicRequest,
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+) -> Job:
+    project = db.scalar(
+        select(Project).where(Project.id == project_id, Project.lab_id == lab_for_user(db, user))
+    )
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    if not project.design_json.get("solution"):
+        raise HTTPException(status_code=409, detail="Accept a BUILD solution first")
+    selected_count = db.scalar(
+        select(func.count(Requirement.id)).where(
+            Requirement.project_id == project.id,
+            Requirement.selected_thing_id.is_not(None),
+        )
+    )
+    if not selected_count:
+        raise HTTPException(
+            status_code=409,
+            detail="This BUILD solution has no owned components to wire",
+        )
+    job = Job(
+        lab_id=project.lab_id,
+        kind="project.schematic",
+        payload={"project_id": project.id, "notes": payload.notes},
+    )
+    db.add(job)
+    db.flush()
+    audit(db, user, "project.schematic_queued", "project", project.id, job_id=job.id)
+    db.commit()
+    return job
+
+
+@app.post(
+    "/api/v1/projects/{project_id}/schematic/accept",
+    response_model=ProjectDetailOut,
+    dependencies=[Depends(require_csrf)],
+)
+def accept_project_schematic(
+    project_id: str,
+    payload: SchematicAccept,
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+) -> dict[str, object]:
+    lab_id = lab_for_user(db, user)
+    project = db.scalar(
+        select(Project)
+        .where(Project.id == project_id, Project.lab_id == lab_id)
+        .with_for_update(of=Project)
+    )
+    job = db.scalar(select(Job).where(Job.id == payload.job_id, Job.lab_id == lab_id))
+    if not project or not job:
+        raise HTTPException(status_code=404, detail="Project or schematic proposal not found")
+    if (
+        job.kind != "project.schematic"
+        or job.status != "completed"
+        or not job.result
+        or str(job.payload.get("project_id", "")) != project.id
+    ):
+        raise HTTPException(status_code=409, detail="Schematic proposal is not ready")
+    if job.expires_at and job.expires_at <= datetime.now(UTC):
+        raise HTTPException(status_code=409, detail="Schematic proposal has expired")
+    if int(str(job.result.get("project_revision", -1))) != project.revision:
+        raise HTTPException(
+            status_code=409, detail="Schematic proposal is stale; generate a new one"
+        )
+    try:
+        accept_schematic(project, job.result, job.id, payload.revision)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    result = dict(job.result)
+    result["accepted_at"] = datetime.now(UTC).isoformat()
+    job.result = result
+    audit(db, user, "project.schematic_accepted", "project", project.id, job_id=job.id)
+    db.commit()
+    return get_project(project.id, user, db)
+
+
+@app.get("/api/v1/projects/{project_id}/schematic.kicad_sch")
+def download_project_schematic(
+    project_id: str, user: User = Depends(current_user), db: Session = Depends(get_db)
+) -> FastAPIResponse:
+    project = db.scalar(
+        select(Project).where(Project.id == project_id, Project.lab_id == lab_for_user(db, user))
+    )
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    schematic = project.design_json.get("schematic")
+    if not isinstance(schematic, dict):
+        raise HTTPException(status_code=409, detail="No accepted schematic is available")
+    content = export_kicad_schematic(schematic)
+    filename = re.sub(r"[^A-Za-z0-9._-]+", "-", project.name).strip("-") or "openlab"
+    return FastAPIResponse(
+        content=content,
+        media_type="application/x-kicad-schematic",
+        headers={"Content-Disposition": f'attachment; filename="{filename}.kicad_sch"'},
+    )
+
+
 @app.post("/api/v1/ai/query", response_model=AIAnswer)
-def ai_query(_: AIQuery, user: User = Depends(current_user)) -> AIAnswer:
-    _ = user
+def ai_query(query: AIQuery, user: User = Depends(current_user)) -> AIAnswer:
+    _ = (query, user)
     return AIAnswer(
         status="disabled",
         answer="AI is disabled. Inventory and compatibility features remain available locally.",

@@ -29,6 +29,10 @@ class Settings(BaseSettings):
     )
     session_hours: int = 24 * 14
     upload_max_bytes: int = 25 * 1024 * 1024
+    kicad_cli: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("OPENLAB_KICAD_CLI", "KICAD_CLI"),
+    )
 
     @property
     def bootstrap_token(self) -> str:
@@ -37,4 +41,4 @@ class Settings(BaseSettings):
 
 @lru_cache
 def get_settings() -> Settings:
-    return Settings()
+    return Settings()  # type: ignore[call-arg]  # values come from configured settings sources

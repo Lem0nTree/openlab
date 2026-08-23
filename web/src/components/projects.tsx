@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
-import { api, idempotencyHeaders, type Location, type Project, type ProjectDetail, type Thing } from "@/lib/api";
+import { api, idempotencyHeaders, type Job, type Location, type Project, type ProjectDetail, type Thing } from "@/lib/api";
 import { LabIcon } from "./lab-icon";
 import { Shell } from "./shell";
 
@@ -11,6 +11,9 @@ export function Projects() {
   const [things, setThings] = useState<Thing[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
   const [error, setError] = useState("");
+  const [planJob, setPlanJob] = useState<Job | null>(null);
+  const [schematicJob, setSchematicJob] = useState<Job | null>(null);
+  const [planning, setPlanning] = useState(false);
 
   const load = async () => {
     try {
@@ -33,7 +36,22 @@ export function Projects() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  useEffect(() => {
+    const active = [planJob, schematicJob].filter((job) => job && ["queued", "running"].includes(job.status)) as Job[];
+    if (active.length === 0) return;
+    const timer = window.setInterval(() => {
+      for (const job of active) {
+        void api<Job>(`/jobs/${job.id}`).then((next) => {
+          if (next.kind === "project.plan") setPlanJob(next); else setSchematicJob(next);
+          if (!["queued", "running"].includes(next.status)) setPlanning(false);
+        }).catch((nextError: Error) => { setError(nextError.message); setPlanning(false); });
+      }
+    }, 1500);
+    return () => window.clearInterval(timer);
+  }, [planJob, schematicJob]);
+
   async function select(id: string) {
+    setPlanJob(null); setSchematicJob(null); setPlanning(false);
     try { setDetail(await api<ProjectDetail>(`/projects/${id}`)); }
     catch (nextError) { setError((nextError as Error).message); }
   }
@@ -84,6 +102,46 @@ export function Projects() {
     } catch (nextError) { setError((nextError as Error).message); }
   }
 
+  async function generatePlan() {
+    if (!detail) return;
+    setPlanning(true); setError(""); setSchematicJob(null);
+    try {
+      setPlanJob(await api<Job>(`/projects/${detail.id}/plan`, { method: "POST", body: JSON.stringify({ goal: detail.description }) }));
+    } catch (nextError) { setError((nextError as Error).message); setPlanning(false); }
+  }
+
+  async function acceptPlan(solutionId: string) {
+    if (!detail || !planJob) return;
+    setPlanning(true); setError("");
+    try {
+      const next = await api<ProjectDetail>(`/projects/${detail.id}/plan/accept`, { method: "POST", body: JSON.stringify({ job_id: planJob.id, solution_id: solutionId, revision: detail.revision }) });
+      setDetail(next); setPlanJob(null);
+    } catch (nextError) { setError((nextError as Error).message); } finally { setPlanning(false); }
+  }
+
+  async function generateSchematic() {
+    if (!detail) return;
+    setPlanning(true); setError("");
+    try {
+      setSchematicJob(await api<Job>(`/projects/${detail.id}/schematic`, { method: "POST", body: JSON.stringify({ notes: null }) }));
+    } catch (nextError) { setError((nextError as Error).message); setPlanning(false); }
+  }
+
+  async function acceptSchematic() {
+    if (!detail || !schematicJob) return;
+    setPlanning(true); setError("");
+    try {
+      const next = await api<ProjectDetail>(`/projects/${detail.id}/schematic/accept`, { method: "POST", body: JSON.stringify({ job_id: schematicJob.id, revision: detail.revision }) });
+      setDetail(next); setSchematicJob(null);
+    } catch (nextError) { setError((nextError as Error).message); } finally { setPlanning(false); }
+  }
+
+  const planSolutions = (planJob?.result?.solutions as Array<{ id: string; score: number; components: Array<{ role_key: string; quantity: string; thing_name: string; match_status: string }>; missing_components: Array<{ role_key: string; name: string; quantity: string }> }> | undefined) ?? [];
+  const schematicValidation = schematicJob?.result?.validation as { status?: string; errors?: string[]; warnings?: string[]; required_support?: string[] } | undefined;
+  const acceptedDesign = detail?.design_json;
+  const acceptedSolution = acceptedDesign?.solution as { components?: unknown[] } | undefined;
+  const canGenerateSchematic = (acceptedSolution?.components?.length ?? 0) > 0;
+
   return <Shell title="Projects & BUILD">
     <section className="build-overview">
       <div><p className="eyebrow">FROM IDEA TO BENCH</p><h2>Build with what you already own.</h2><p>Define requirements, reserve real stock, and keep every recoverable component traceable.</p></div>
@@ -114,6 +172,21 @@ export function Projects() {
 
       {detail ? <section className="project-detail-panel">
         <div className="project-detail-head"><div><p className="eyebrow">ACTIVE BUILD</p><h2>{detail.name}</h2><p>{detail.description || "Add requirements to start shaping this build."}</p></div><span className="build-status"><i/>{detail.status}</span></div>
+
+        <section className="build-block build-planner">
+          <div className="build-block-heading"><span className="build-block-icon"><LabIcon name="spark"/></span><div><h3>BUILD intelligence</h3><p>Match the goal to owned items before making a buy list.</p></div><button type="button" onClick={() => void generatePlan()} disabled={planning}>{planning && planJob?.status !== "completed" ? "Planning…" : "Find best build"}</button></div>
+          {planJob?.last_error && <p className="error">{planJob.last_error}</p>}
+          {planSolutions.map((solution, index) => <article className="build-solution" key={solution.id}><div><strong>Solution {index + 1}</strong><small>{solution.components.length} inventory matches · {solution.missing_components.length} required to buy</small></div><div className="build-item-list">{solution.components.map((component) => <div className="build-item" key={component.role_key}><span>{component.quantity}×</span><strong>{component.thing_name}</strong><small>{component.role_key.replaceAll("_", " ")} · {component.match_status}</small></div>)}{solution.missing_components.map((component) => <div className="build-item missing" key={component.role_key}><span>{component.quantity}×</span><strong>{component.name}</strong><small>Component required</small></div>)}</div><button type="button" onClick={() => void acceptPlan(solution.id)} disabled={planning}>Use this solution</button></article>)}
+          {planJob?.status === "completed" && planSolutions.length === 0 && <p className="build-empty-copy">No complete stock match was found. Add manual requirements or enrich inventory profiles, then try again.</p>}
+          {Boolean(acceptedDesign?.status) && <div className="build-accepted"><strong>Accepted design</strong><span>{String(acceptedDesign?.status).replaceAll("_", " ")}</span></div>}
+        </section>
+
+        {canGenerateSchematic && <section className="build-block build-planner">
+          <div className="build-block-heading"><span className="build-block-icon cyan"><LabIcon name="layers"/></span><div><h3>Wiring proposal</h3><p>Uses only saved pin data, then runs deterministic electrical checks.</p></div><button type="button" onClick={() => void generateSchematic()} disabled={planning}>{planning && schematicJob?.status !== "completed" ? "Checking…" : "Generate schematic"}</button></div>
+          {schematicJob?.last_error && <p className="error">{schematicJob.last_error}</p>}
+          {schematicValidation && <div className="schematic-review"><span className="status">{schematicValidation.status}</span>{schematicValidation.errors?.map((value) => <p className="error" key={value}>{value}</p>)}{schematicValidation.warnings?.map((value) => <p className="notice" key={value}>{value}</p>)}{schematicValidation.required_support?.map((value) => <div className="build-item missing" key={value}><strong>{value}</strong><small>Component required / verify first</small></div>)}{schematicJob?.result?.status !== "blocked" && <button type="button" onClick={() => void acceptSchematic()} disabled={planning}>Accept checked schematic</button>}</div>}
+          {Boolean(acceptedDesign?.schematic) && <a className="text-link" href={`/api/v1/projects/${detail.id}/schematic.kicad_sch`}>Download KiCad schematic →</a>}
+        </section>}
 
         <section className="build-block">
           <div className="build-block-heading"><span className="build-block-icon"><LabIcon name="layers"/></span><div><h3>BOM requirements</h3><p>What the build needs, before matching it to stock.</p></div><b>{detail.requirements.length}</b></div>

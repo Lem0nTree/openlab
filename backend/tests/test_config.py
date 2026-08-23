@@ -12,7 +12,7 @@ def test_prefixed_openlab_settings_are_loaded(monkeypatch) -> None:
         database_url="postgresql+psycopg://openlab:openlab@localhost:5432/openlab",
     )
 
-    assert str(settings.data_dir) == "/var/lib/openlab"
+    assert str(settings.data_dir).replace("\\", "/") == "/var/lib/openlab"
     assert settings.secret_key == "session-secret"
     assert settings.setup_token == "setup-token"
     assert settings.encryption_key == "encryption-key"
