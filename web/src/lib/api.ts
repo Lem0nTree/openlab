@@ -9,7 +9,7 @@ export type Thing = {
 
 export type Location = { id: string; name: string; parent_id: string | null; public_code: string };
 export type InboxItem = { id: string; input_type: string; status: string; text: string | null; error: string | null; processing_evidence: Record<string, unknown>; created_at: string };
-export type InboxCandidate = { id: string; name: string; quantity: string; category: string; identity_confidence: "high" | "medium" | "low" | "unresolved"; status: string; thing_id: string | null; product_url: string | null; provenance: Record<string, unknown> };
+export type InboxCandidate = { id: string; name: string; quantity: string; category: string; identity_confidence: string; status: string; thing_id: string | null; product_url: string | null; provenance: Record<string, unknown> };
 export type ProviderConfig = { id: string; provider: string; base_url: string; model: string; embedding_model: string | null; enabled: boolean; embeddings_enabled: boolean; has_api_key: boolean; egress: "local" | "external" };
 export type Project = { id: string; name: string; description: string | null; status: string; revision: number };
 export type Requirement = { id: string; name: string; quantity: string; priority: string; constraints: Record<string, unknown>; source: string; role_key: string | null; selected_thing_id: string | null; match_status: string | null };

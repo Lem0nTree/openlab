@@ -64,6 +64,7 @@ from .schemas import (
     InboxCandidateConfirm,
     InboxCandidateInput,
     InboxCandidateOut,
+    InboxCandidatePatch,
     InboxCandidateReceive,
     InboxCapture,
     InboxEnrichURL,
@@ -690,6 +691,50 @@ def inbox_candidate_for_user(
     return item, candidate
 
 
+def update_candidate_proposal(
+    candidate: InboxCandidate, payload: InboxCandidatePatch
+) -> InboxCandidate:
+    if candidate.status != "proposed":
+        raise HTTPException(
+            status_code=409,
+            detail="Only proposed candidates can be edited; edit the inventory item instead",
+        )
+    if payload.name is not None:
+        candidate.name = payload.name
+    if payload.quantity is not None:
+        candidate.quantity = payload.quantity
+    if payload.category is not None:
+        candidate.category = payload.category
+    if "description" in payload.model_fields_set:
+        provenance = dict(candidate.provenance)
+        if payload.description is None:
+            provenance.pop("description", None)
+        else:
+            provenance["description"] = payload.description
+        candidate.provenance = provenance
+    candidate.revision = (candidate.revision or 0) + 1
+    return candidate
+
+
+@app.patch(
+    "/api/v1/inbox/{inbox_id}/candidates/{candidate_id}",
+    response_model=InboxCandidateOut,
+    dependencies=[Depends(require_csrf)],
+)
+def patch_inbox_candidate(
+    inbox_id: str,
+    candidate_id: str,
+    payload: InboxCandidatePatch,
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+) -> InboxCandidate:
+    _item, candidate = inbox_candidate_for_user(db, user, inbox_id, candidate_id)
+    update_candidate_proposal(candidate, payload)
+    audit(db, user, "inbox.candidate_updated", "inbox_candidate", candidate.id)
+    db.commit()
+    return candidate
+
+
 def confirm_candidate_identity(
     db: Session,
     user: User,
@@ -832,6 +877,30 @@ def ignore_inbox_candidate(
     audit(db, user, "inbox.candidate_ignored", "inbox_candidate", candidate.id)
     db.commit()
     return candidate
+
+
+@app.delete(
+    "/api/v1/inbox/{inbox_id}/candidates/{candidate_id}",
+    status_code=204,
+    dependencies=[Depends(require_csrf)],
+)
+def delete_inbox_candidate(
+    inbox_id: str,
+    candidate_id: str,
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+) -> Response:
+    item, candidate = inbox_candidate_for_user(db, user, inbox_id, candidate_id)
+    if candidate.status != "proposed":
+        raise HTTPException(
+            status_code=409,
+            detail="Only proposed candidates can be removed; edit the inventory item instead",
+        )
+    candidate.status = "ignored"
+    refresh_inbox_status(db, item)
+    audit(db, user, "inbox.candidate_removed", "inbox_candidate", candidate.id)
+    db.commit()
+    return Response(status_code=204)
 
 
 @app.post(

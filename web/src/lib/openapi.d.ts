@@ -353,7 +353,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/inbox/{inbox_id}/confirm": {
+    "/api/v1/inbox/{inbox_id}/candidates/{candidate_id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -362,8 +362,94 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Confirm Inbox */
-        post: operations["confirm_inbox_api_v1_inbox__inbox_id__confirm_post"];
+        post?: never;
+        /** Delete Inbox Candidate */
+        delete: operations["delete_inbox_candidate_api_v1_inbox__inbox_id__candidates__candidate_id__delete"];
+        options?: never;
+        head?: never;
+        /** Patch Inbox Candidate */
+        patch: operations["patch_inbox_candidate_api_v1_inbox__inbox_id__candidates__candidate_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/inbox/{inbox_id}/candidates/{candidate_id}/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Confirm Inbox Candidate */
+        post: operations["confirm_inbox_candidate_api_v1_inbox__inbox_id__candidates__candidate_id__confirm_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/inbox/{inbox_id}/confirm-batch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Confirm Inbox Batch */
+        post: operations["confirm_inbox_batch_api_v1_inbox__inbox_id__confirm_batch_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/inbox/{inbox_id}/candidates/{candidate_id}/ignore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Ignore Inbox Candidate */
+        post: operations["ignore_inbox_candidate_api_v1_inbox__inbox_id__candidates__candidate_id__ignore_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/inbox/{inbox_id}/candidates/{candidate_id}/receive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Receive Inbox Candidate */
+        post: operations["receive_inbox_candidate_api_v1_inbox__inbox_id__candidates__candidate_id__receive_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/inbox/{inbox_id}/candidates/{candidate_id}/enrich-url": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Enrich Inbox Candidate Url */
+        post: operations["enrich_inbox_candidate_url_api_v1_inbox__inbox_id__candidates__candidate_id__enrich_url_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -473,6 +559,160 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/knowledge/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Knowledge Search */
+        post: operations["knowledge_search_api_v1_knowledge_search_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/things/{thing_id}/knowledge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Replace Thing Knowledge */
+        put: operations["replace_thing_knowledge_api_v1_things__thing_id__knowledge_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/jobs/{job_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Job */
+        get: operations["get_job_api_v1_jobs__job_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{project_id}/plan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Queue Build Plan */
+        post: operations["queue_build_plan_api_v1_projects__project_id__plan_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{project_id}/plan/accept": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Accept Project Plan */
+        post: operations["accept_project_plan_api_v1_projects__project_id__plan_accept_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/things/{thing_id}/pins": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Pinout */
+        get: operations["get_pinout_api_v1_things__thing_id__pins_get"];
+        /** Replace Pinout */
+        put: operations["replace_pinout_api_v1_things__thing_id__pins_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{project_id}/schematic": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Queue Schematic */
+        post: operations["queue_schematic_api_v1_projects__project_id__schematic_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{project_id}/schematic/accept": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Accept Project Schematic */
+        post: operations["accept_project_schematic_api_v1_projects__project_id__schematic_accept_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{project_id}/schematic.kicad_sch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Download Project Schematic */
+        get: operations["download_project_schematic_api_v1_projects__project_id__schematic_kicad_sch_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/ai/query": {
         parameters: {
             query?: never;
@@ -562,6 +802,20 @@ export interface components {
             /** Upload */
             upload: string;
         };
+        /** BuildPlanAccept */
+        BuildPlanAccept: {
+            /** Job Id */
+            job_id: string;
+            /** Solution Id */
+            solution_id: string;
+            /** Revision */
+            revision: number;
+        };
+        /** BuildPlanRequest */
+        BuildPlanRequest: {
+            /** Goal */
+            goal?: string | null;
+        };
         /** CompatibilityRequest */
         CompatibilityRequest: {
             /** Required Capabilities */
@@ -618,23 +872,23 @@ export interface components {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
         };
-        /** InboxCandidateInput */
-        InboxCandidateInput: {
+        /** InboxCandidateBatchConfirm */
+        InboxCandidateBatchConfirm: {
+            /** Candidate Ids */
+            candidate_ids: string[];
+        };
+        /** InboxCandidateConfirm */
+        InboxCandidateConfirm: {
             /** Name */
-            name: string;
+            name?: string | null;
+            /** Description */
+            description?: string | null;
             /** Quantity */
-            quantity: number | string;
-            /**
-             * Category
-             * @default uncategorized
-             */
-            category: string;
-            /**
-             * Confidence
-             * @default unresolved
-             * @enum {string}
-             */
-            confidence: "confirmed" | "likely" | "generic" | "unresolved";
+            quantity?: number | string | null;
+            /** Category */
+            category?: ("module" | "ic" | "board" | "sensor" | "passive" | "connector" | "power" | "tool" | "other" | "uncategorized") | null;
+            /** Existing Thing Id */
+            existing_thing_id?: string | null;
         };
         /** InboxCandidateOut */
         InboxCandidateOut: {
@@ -646,12 +900,36 @@ export interface components {
             quantity: string;
             /** Category */
             category: string;
-            /** Confidence */
-            confidence: string;
+            /** Identity Confidence */
+            identity_confidence: string;
+            /** Status */
+            status: string;
+            /** Thing Id */
+            thing_id: string | null;
+            /** Product Url */
+            product_url: string | null;
             /** Provenance */
             provenance: {
                 [key: string]: unknown;
             };
+        };
+        /** InboxCandidatePatch */
+        InboxCandidatePatch: {
+            /** Name */
+            name?: string | null;
+            /** Description */
+            description?: string | null;
+            /** Quantity */
+            quantity?: number | string | null;
+            /** Category */
+            category?: ("module" | "ic" | "board" | "sensor" | "passive" | "connector" | "power" | "tool" | "other" | "uncategorized") | null;
+        };
+        /** InboxCandidateReceive */
+        InboxCandidateReceive: {
+            /** Location Id */
+            location_id: string;
+            /** Quantity */
+            quantity?: number | string | null;
         };
         /** InboxCapture */
         InboxCapture: {
@@ -659,17 +937,14 @@ export interface components {
              * Input Type
              * @enum {string}
              */
-            input_type: "text" | "photo" | "screenshot" | "voice" | "pdf";
+            input_type: "text" | "photo" | "screenshot" | "voice" | "pdf" | "email";
             /** Text */
             text?: string | null;
         };
-        /** InboxConfirm */
-        InboxConfirm: {
-            /** Location Id */
-            location_id: string;
-            candidate: components["schemas"]["InboxCandidateInput"];
-            /** Existing Thing Id */
-            existing_thing_id?: string | null;
+        /** InboxEnrichURL */
+        InboxEnrichURL: {
+            /** Url */
+            url: string;
         };
         /** InboxOut */
         InboxOut: {
@@ -692,6 +967,64 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+        };
+        /** InterfaceInput */
+        InterfaceInput: {
+            /** Kind */
+            kind: string;
+            /** Details */
+            details?: {
+                [key: string]: unknown;
+            };
+        };
+        /** JobOut */
+        JobOut: {
+            /** Id */
+            id: string;
+            /** Kind */
+            kind: string;
+            /** Status */
+            status: string;
+            /** Result */
+            result: {
+                [key: string]: unknown;
+            } | null;
+            /** Attempts */
+            attempts: number;
+            /** Last Error */
+            last_error: string | null;
+            /** Expires At */
+            expires_at: string | null;
+        };
+        /** KnowledgeSearchRequest */
+        KnowledgeSearchRequest: {
+            /** Query */
+            query: string;
+            /**
+             * Limit
+             * @default 10
+             */
+            limit: number;
+        };
+        /** KnowledgeSearchResult */
+        KnowledgeSearchResult: {
+            /** Thing Id */
+            thing_id: string;
+            /** Name */
+            name: string;
+            /** Category */
+            category: string;
+            /** Score */
+            score: number;
+            /**
+             * Match Type
+             * @enum {string}
+             */
+            match_type: "exact" | "text" | "semantic";
+            /** Available Quantity */
+            available_quantity: string;
+            /** Locations */
+            locations?: string[];
         };
         /** LabOut */
         LabOut: {
@@ -729,6 +1062,67 @@ export interface components {
             /** Password */
             password: string;
         };
+        /** PinInput */
+        PinInput: {
+            /** Name */
+            name: string;
+            /** Role */
+            role: string;
+            /** Number */
+            number?: string | null;
+            /**
+             * Electrical Type
+             * @default passive
+             * @enum {string}
+             */
+            electrical_type: "power_in" | "power_out" | "ground" | "input" | "output" | "bidirectional" | "open_drain" | "passive" | "no_connect";
+            /** Alternate Functions */
+            alternate_functions?: string[];
+            /** Restrictions */
+            restrictions?: string | null;
+            /** Details */
+            details?: {
+                [key: string]: unknown;
+            };
+            /** Source Ref */
+            source_ref?: string | null;
+            /**
+             * Verification State
+             * @default unverified
+             * @enum {string}
+             */
+            verification_state: "unverified" | "accepted" | "verified";
+        };
+        /** PinOut */
+        PinOut: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /** Role */
+            role: string;
+            /** Number */
+            number: string | null;
+            /** Electrical Type */
+            electrical_type: string;
+            /** Alternate Functions */
+            alternate_functions: string[];
+            /** Restrictions */
+            restrictions: string | null;
+            /** Details */
+            details: {
+                [key: string]: unknown;
+            };
+            /** Source Ref */
+            source_ref: string | null;
+            /** Verification State */
+            verification_state: string;
+        };
+        /** PinoutReplace */
+        PinoutReplace: {
+            /** Pins */
+            pins: components["schemas"]["PinInput"][];
+        };
         /** ProjectCreate */
         ProjectCreate: {
             /** Name */
@@ -746,10 +1140,16 @@ export interface components {
             description: string | null;
             /** Status */
             status: string;
+            /** Revision */
+            revision: number;
             /** Requirements */
             requirements: components["schemas"]["RequirementOut"][];
             /** Allocations */
             allocations: components["schemas"]["AllocationOut"][];
+            /** Design Json */
+            design_json: {
+                [key: string]: unknown;
+            };
         };
         /** ProjectOut */
         ProjectOut: {
@@ -761,6 +1161,8 @@ export interface components {
             description: string | null;
             /** Status */
             status: string;
+            /** Revision */
+            revision: number;
         };
         /**
          * ProviderConfigInput
@@ -771,6 +1173,8 @@ export interface components {
             base_url: string;
             /** Model */
             model: string;
+            /** Embedding Model */
+            embedding_model?: string | null;
             /** Api Key */
             api_key?: string | null;
             /**
@@ -778,6 +1182,11 @@ export interface components {
              * @default false
              */
             enabled: boolean;
+            /**
+             * Embeddings Enabled
+             * @default false
+             */
+            embeddings_enabled: boolean;
         };
         /** ProviderConfigOut */
         ProviderConfigOut: {
@@ -789,8 +1198,12 @@ export interface components {
             base_url: string;
             /** Model */
             model: string;
+            /** Embedding Model */
+            embedding_model: string | null;
             /** Enabled */
             enabled: boolean;
+            /** Embeddings Enabled */
+            embeddings_enabled: boolean;
             /** Has Api Key */
             has_api_key: boolean;
             /**
@@ -840,6 +1253,26 @@ export interface components {
             constraints: {
                 [key: string]: unknown;
             };
+            /** Source */
+            source: string;
+            /** Role Key */
+            role_key: string | null;
+            /** Selected Thing Id */
+            selected_thing_id: string | null;
+            /** Match Status */
+            match_status: string | null;
+        };
+        /** SchematicAccept */
+        SchematicAccept: {
+            /** Job Id */
+            job_id: string;
+            /** Revision */
+            revision: number;
+        };
+        /** SchematicRequest */
+        SchematicRequest: {
+            /** Notes */
+            notes?: string | null;
         };
         /** SetupRequest */
         SetupRequest: {
@@ -912,6 +1345,13 @@ export interface components {
             };
             /** Aliases */
             aliases?: string[];
+        };
+        /** ThingKnowledgeReplace */
+        ThingKnowledgeReplace: {
+            /** Capabilities */
+            capabilities?: string[];
+            /** Interfaces */
+            interfaces?: components["schemas"]["InterfaceInput"][];
         };
         /** ThingOut */
         ThingOut: {
@@ -1970,12 +2410,128 @@ export interface operations {
             };
         };
     };
-    confirm_inbox_api_v1_inbox__inbox_id__confirm_post: {
+    delete_inbox_candidate_api_v1_inbox__inbox_id__candidates__candidate_id__delete: {
         parameters: {
             query?: never;
             header?: {
                 "X-CSRF-Token"?: string | null;
-                "Idempotency-Key"?: string | null;
+            };
+            path: {
+                inbox_id: string;
+                candidate_id: string;
+            };
+            cookie?: {
+                openlab_csrf?: string | null;
+                openlab_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    patch_inbox_candidate_api_v1_inbox__inbox_id__candidates__candidate_id__patch: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
+            path: {
+                inbox_id: string;
+                candidate_id: string;
+            };
+            cookie?: {
+                openlab_csrf?: string | null;
+                openlab_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InboxCandidatePatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InboxCandidateOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    confirm_inbox_candidate_api_v1_inbox__inbox_id__candidates__candidate_id__confirm_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
+            path: {
+                inbox_id: string;
+                candidate_id: string;
+            };
+            cookie?: {
+                openlab_csrf?: string | null;
+                openlab_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InboxCandidateConfirm"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InboxCandidateOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    confirm_inbox_batch_api_v1_inbox__inbox_id__confirm_batch_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
             };
             path: {
                 inbox_id: string;
@@ -1987,7 +2543,86 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["InboxConfirm"];
+                "application/json": components["schemas"]["InboxCandidateBatchConfirm"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InboxCandidateOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    ignore_inbox_candidate_api_v1_inbox__inbox_id__candidates__candidate_id__ignore_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
+            path: {
+                inbox_id: string;
+                candidate_id: string;
+            };
+            cookie?: {
+                openlab_csrf?: string | null;
+                openlab_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InboxCandidateOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    receive_inbox_candidate_api_v1_inbox__inbox_id__candidates__candidate_id__receive_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+                "Idempotency-Key"?: string | null;
+            };
+            path: {
+                inbox_id: string;
+                candidate_id: string;
+            };
+            cookie?: {
+                openlab_csrf?: string | null;
+                openlab_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InboxCandidateReceive"];
             };
         };
         responses: {
@@ -1998,6 +2633,47 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["StockMovementOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    enrich_inbox_candidate_url_api_v1_inbox__inbox_id__candidates__candidate_id__enrich_url_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
+            path: {
+                inbox_id: string;
+                candidate_id: string;
+            };
+            cookie?: {
+                openlab_csrf?: string | null;
+                openlab_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InboxEnrichURL"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InboxCandidateOut"];
                 };
             };
             /** @description Validation Error */
@@ -2271,6 +2947,382 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CompatibilityResult"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    knowledge_search_api_v1_knowledge_search_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                openlab_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["KnowledgeSearchRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KnowledgeSearchResult"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    replace_thing_knowledge_api_v1_things__thing_id__knowledge_put: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
+            path: {
+                thing_id: string;
+            };
+            cookie?: {
+                openlab_csrf?: string | null;
+                openlab_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ThingKnowledgeReplace"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_job_api_v1_jobs__job_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_id: string;
+            };
+            cookie?: {
+                openlab_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    queue_build_plan_api_v1_projects__project_id__plan_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
+            path: {
+                project_id: string;
+            };
+            cookie?: {
+                openlab_csrf?: string | null;
+                openlab_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BuildPlanRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    accept_project_plan_api_v1_projects__project_id__plan_accept_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
+            path: {
+                project_id: string;
+            };
+            cookie?: {
+                openlab_csrf?: string | null;
+                openlab_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BuildPlanAccept"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectDetailOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_pinout_api_v1_things__thing_id__pins_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                thing_id: string;
+            };
+            cookie?: {
+                openlab_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PinOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    replace_pinout_api_v1_things__thing_id__pins_put: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
+            path: {
+                thing_id: string;
+            };
+            cookie?: {
+                openlab_csrf?: string | null;
+                openlab_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PinoutReplace"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PinOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    queue_schematic_api_v1_projects__project_id__schematic_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
+            path: {
+                project_id: string;
+            };
+            cookie?: {
+                openlab_csrf?: string | null;
+                openlab_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SchematicRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    accept_project_schematic_api_v1_projects__project_id__schematic_accept_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
+            path: {
+                project_id: string;
+            };
+            cookie?: {
+                openlab_csrf?: string | null;
+                openlab_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SchematicAccept"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectDetailOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    download_project_schematic_api_v1_projects__project_id__schematic_kicad_sch_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: {
+                openlab_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */

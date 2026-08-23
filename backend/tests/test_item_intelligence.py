@@ -6,11 +6,12 @@ from fastapi import HTTPException
 from pydantic import ValidationError
 from pypdf import PdfWriter
 
+from openlab.demo_seed import COMMON_MODULES
 from openlab.intelligence import BuildBreakdown, _valid_vector
-from openlab.main import app, confirm_candidate_identity
+from openlab.main import app, confirm_candidate_identity, update_candidate_proposal
 from openlab.models import InboxCandidate
 from openlab.providers import OpenAICompatibleProvider, ProviderError
-from openlab.schemas import InboxCandidateConfirm, InboxCandidateInput
+from openlab.schemas import InboxCandidateConfirm, InboxCandidateInput, InboxCandidatePatch
 from openlab.schematics import WiringProposal, export_kicad_schematic
 from openlab.services import canonical_profile, extract_pdf_text
 
@@ -44,6 +45,43 @@ def test_openapi_registers_item_intelligence_routes() -> None:
     assert "/api/v1/projects/{project_id}/plan" in paths
     assert "/api/v1/projects/{project_id}/schematic" in paths
     assert "/api/v1/things/{thing_id}/pins" in paths
+    candidate_path = "/api/v1/inbox/{inbox_id}/candidates/{candidate_id}"
+    assert {"patch", "delete"}.issubset(paths[candidate_path])
+
+
+def test_common_module_seed_has_exactly_100_unique_semantic_profiles() -> None:
+    assert len(COMMON_MODULES) == 100
+    assert len({module.key for module in COMMON_MODULES}) == 100
+    assert len({module.name for module in COMMON_MODULES}) == 100
+    assert all(module.description and module.capabilities for module in COMMON_MODULES)
+
+
+def test_proposed_candidate_can_be_edited_without_confirmation() -> None:
+    candidate = InboxCandidate(
+        inbox_item_id="inbox",
+        name="Long marketplace title",
+        quantity=Decimal(1),
+        category="other",
+        identity_confidence="high",
+        status="proposed",
+        provenance={"raw_title": "retained evidence"},
+    )
+    update_candidate_proposal(
+        candidate,
+        InboxCandidatePatch(
+            name="MCP23017",
+            description="GPIO expansion module controlled over I2C.",
+            quantity=Decimal(2),
+            category="module",
+        ),
+    )
+    assert candidate.name == "MCP23017"
+    assert candidate.quantity == Decimal(2)
+    assert candidate.provenance == {
+        "raw_title": "retained evidence",
+        "description": "GPIO expansion module controlled over I2C.",
+    }
+    assert candidate.status == "proposed"
 
 
 def test_unresolved_candidate_requires_product_link_before_confirmation() -> None:
