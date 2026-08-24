@@ -55,6 +55,20 @@ The key is stored encrypted and never returned through the API. The Inbox
 displays whether captured data stays local or leaves the server before it is
 processed.
 
+## Configure the lab and KiCad
+
+Open **Settings** as the lab owner to change the lab name, measurement system,
+AI provider, and optional KiCad command. The KiCad value is a command or path
+inside the worker container, not a path on the Docker host. A saved Settings
+value takes precedence over `OPENLAB_KICAD_CLI`; clearing it restores the
+environment fallback.
+
+The standard Raspberry Pi image does not install KiCad. Use a custom
+KiCad-enabled backend/worker image, then enter `kicad-cli` or its absolute
+container path and run **Check again**. The Deployment section lists the other
+supported environment variables without returning secrets. Edit those values
+in the repository-root `.env` and recreate the affected services.
+
 See [MVP 1 Smart Inbox](docs/MVP1_SMART_INBOX.md) and
 [remaining scope](docs/REMAINING_FEATURES.md) for implementation status.
 

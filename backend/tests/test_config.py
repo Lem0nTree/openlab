@@ -6,6 +6,7 @@ def test_prefixed_openlab_settings_are_loaded(monkeypatch) -> None:
     monkeypatch.setenv("OPENLAB_SECRET_KEY", "session-secret")
     monkeypatch.setenv("OPENLAB_SETUP_TOKEN", "setup-token")
     monkeypatch.setenv("OPENLAB_ENCRYPTION_KEY", "encryption-key")
+    monkeypatch.setenv("OPENLAB_KICAD_CLI", "/usr/bin/kicad-cli")
 
     settings = Settings(
         _env_file=None,
@@ -16,3 +17,4 @@ def test_prefixed_openlab_settings_are_loaded(monkeypatch) -> None:
     assert settings.secret_key == "session-secret"
     assert settings.setup_token == "setup-token"
     assert settings.encryption_key == "encryption-key"
+    assert settings.kicad_cli == "/usr/bin/kicad-cli"

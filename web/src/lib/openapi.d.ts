@@ -75,6 +75,74 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Settings Overview */
+        get: operations["get_settings_overview_api_v1_settings_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/settings/lab": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Save Lab Settings */
+        put: operations["save_lab_settings_api_v1_settings_lab_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/settings/kicad": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Save Kicad Settings */
+        put: operations["save_kicad_settings_api_v1_settings_kicad_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/settings/kicad/check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Queue Kicad Check */
+        post: operations["queue_kicad_check_api_v1_settings_kicad_check_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/ai/provider": {
         parameters: {
             query?: never;
@@ -954,6 +1022,40 @@ export interface components {
             /** Evidence */
             evidence: string[];
         };
+        /** EnvironmentVariableOut */
+        EnvironmentVariableOut: {
+            /** Name */
+            name: string;
+            /**
+             * Category
+             * @enum {string}
+             */
+            category: "application" | "security" | "infrastructure";
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "configured" | "not_configured" | "deployment_managed";
+            /** Value */
+            value?: string | null;
+            /**
+             * Secret
+             * @default false
+             */
+            secret: boolean;
+            /**
+             * Editable
+             * @default false
+             */
+            editable: boolean;
+            /**
+             * Restart Required
+             * @default true
+             */
+            restart_required: boolean;
+            /** Description */
+            description: string;
+        };
         /** FactCreate */
         FactCreate: {
             /** Key */
@@ -1111,6 +1213,32 @@ export interface components {
             /** Expires At */
             expires_at: string | null;
         };
+        /** KicadSettingsInput */
+        KicadSettingsInput: {
+            /** Cli Path */
+            cli_path?: string | null;
+        };
+        /** KicadSettingsOut */
+        KicadSettingsOut: {
+            /** Cli Path */
+            cli_path: string | null;
+            /** Effective Cli */
+            effective_cli: string | null;
+            /**
+             * Source
+             * @enum {string}
+             */
+            source: "settings" | "environment" | "unset";
+            /**
+             * Check Status
+             * @enum {string}
+             */
+            check_status: "unknown" | "queued" | "running" | "available" | "unavailable";
+            /** Version */
+            version: string | null;
+            /** Error */
+            error: string | null;
+        };
         /** KnowledgeSearchRequest */
         KnowledgeSearchRequest: {
             /** Query */
@@ -1149,6 +1277,16 @@ export interface components {
             name: string;
             /** Units */
             units: string;
+        };
+        /** LabSettingsInput */
+        LabSettingsInput: {
+            /** Name */
+            name: string;
+            /**
+             * Units
+             * @enum {string}
+             */
+            units: "metric" | "imperial";
         };
         /** LocationCreate */
         LocationCreate: {
@@ -1432,6 +1570,13 @@ export interface components {
         SchematicRequest: {
             /** Notes */
             notes?: string | null;
+        };
+        /** SettingsOverviewOut */
+        SettingsOverviewOut: {
+            lab: components["schemas"]["LabOut"];
+            kicad: components["schemas"]["KicadSettingsOut"];
+            /** Environment */
+            environment: components["schemas"]["EnvironmentVariableOut"][];
         };
         /** SetupRequest */
         SetupRequest: {
@@ -1827,6 +1972,147 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["LabOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_settings_overview_api_v1_settings_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                openlab_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SettingsOverviewOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    save_lab_settings_api_v1_settings_lab_put: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                openlab_csrf?: string | null;
+                openlab_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LabSettingsInput"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LabOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    save_kicad_settings_api_v1_settings_kicad_put: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                openlab_csrf?: string | null;
+                openlab_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["KicadSettingsInput"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KicadSettingsOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    queue_kicad_check_api_v1_settings_kicad_check_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                openlab_csrf?: string | null;
+                openlab_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobOut"];
                 };
             };
             /** @description Validation Error */

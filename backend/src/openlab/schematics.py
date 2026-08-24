@@ -16,9 +16,10 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from .config import get_settings
-from .models import Pin, Project, Requirement, Thing, ThingInterface
+from .models import Lab, Pin, Project, Requirement, Thing, ThingInterface
 from .providers import ProviderError
 from .services import active_provider
+from .system_settings import effective_kicad_cli
 
 
 class StrictModel(BaseModel):
@@ -379,10 +380,14 @@ def propose_schematic(
         "components": components,
         "nets": [net.model_dump() for net in proposal.nets],
         "validation": validation,
-        "erc": {"status": "not_run", "reason": "OPENLAB_KICAD_CLI is not configured"},
+        "erc": {
+            "status": "not_run",
+            "reason": "KiCad CLI is unavailable. Configure it under Settings → KiCad.",
+        },
     }
-    if validation["status"] != "blocked" and get_settings().kicad_cli:
-        result["erc"] = run_kicad_erc(result)
+    kicad_cli, _ = effective_kicad_cli(db.get(Lab, lab_id), get_settings())
+    if validation["status"] != "blocked" and kicad_cli:
+        result["erc"] = run_kicad_erc(result, kicad_cli)
     return result
 
 
@@ -558,10 +563,13 @@ def export_kicad_schematic(design: dict[str, object]) -> str:
     return "\n".join(lines) + "\n"
 
 
-def run_kicad_erc(design: dict[str, object]) -> dict[str, object]:
-    cli = get_settings().kicad_cli
+def run_kicad_erc(design: dict[str, object], cli: str | None = None) -> dict[str, object]:
+    cli = cli or get_settings().kicad_cli
     if not cli:
-        return {"status": "not_run", "reason": "OPENLAB_KICAD_CLI is not configured"}
+        return {
+            "status": "not_run",
+            "reason": "KiCad CLI is unavailable. Configure it under Settings → KiCad.",
+        }
     with tempfile.TemporaryDirectory(prefix="openlab-erc-") as temporary:
         schematic_path = Path(temporary) / "openlab.kicad_sch"
         report_path = Path(temporary) / "erc.json"

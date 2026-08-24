@@ -43,5 +43,8 @@ pull-up confirmation.
 
 The accepted wiring plan can be downloaded as a `.kicad_sch` containing generic sourced-pin
 symbols, their recorded electrical types, and actual nets. If
-`OPENLAB_KICAD_CLI` points to `kicad-cli` inside the worker environment, the proposal job also runs
-`kicad-cli sch erc`. The standard Raspberry Pi image intentionally does not include KiCad.
+When Settings -> KiCad or the `OPENLAB_KICAD_CLI` fallback points to `kicad-cli`
+inside the worker environment, the proposal job also runs `kicad-cli sch erc`.
+The Settings value wins and can be checked from the worker before a schematic
+job is started. The standard Raspberry Pi image intentionally does not include
+KiCad.
