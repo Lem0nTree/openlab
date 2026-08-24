@@ -209,6 +209,24 @@ def _token_score(query: str, values: list[str]) -> float:
     return best
 
 
+def _inventory_retrieval_values(
+    thing: Thing,
+    aliases: list[str],
+    capabilities: list[str],
+    interfaces: list[str],
+) -> list[str]:
+    description = thing.metadata_json.get("description")
+    return [
+        thing.name,
+        thing.mpn or "",
+        thing.category,
+        str(description) if isinstance(description, str) else "",
+        *aliases,
+        *capabilities,
+        *interfaces,
+    ]
+
+
 def search_inventory(
     db: Session, lab_id: str, query: str, limit: int = 10
 ) -> list[dict[str, object]]:
@@ -223,6 +241,18 @@ def search_inventory(
         select(ThingAlias.thing_id, ThingAlias.value).where(ThingAlias.thing_id.in_(thing_ids))
     ).all():
         aliases_by_thing[thing_id].append(value)
+    capabilities_by_thing: dict[str, list[str]] = {thing_id: [] for thing_id in thing_ids}
+    for thing_id, value in db.execute(
+        select(Capability.thing_id, Capability.value).where(Capability.thing_id.in_(thing_ids))
+    ).all():
+        capabilities_by_thing[thing_id].append(value)
+    interfaces_by_thing: dict[str, list[str]] = {thing_id: [] for thing_id in thing_ids}
+    for thing_id, kind in db.execute(
+        select(ThingInterface.thing_id, ThingInterface.kind).where(
+            ThingInterface.thing_id.in_(thing_ids)
+        )
+    ).all():
+        interfaces_by_thing[thing_id].append(kind)
 
     semantic: dict[str, float] = {}
     try:
@@ -272,14 +302,12 @@ def search_inventory(
     results: list[dict[str, object]] = []
     for thing in things:
         aliases = aliases_by_thing[thing.id]
-        description = thing.metadata_json.get("description")
-        values = [
-            thing.name,
-            thing.mpn or "",
-            thing.category,
-            str(description) if isinstance(description, str) else "",
-            *aliases,
-        ]
+        values = _inventory_retrieval_values(
+            thing,
+            aliases,
+            capabilities_by_thing[thing.id],
+            interfaces_by_thing[thing.id],
+        )
         exact = any(_normalize(value) == normalized_query for value in values if value)
         text_score = _token_score(query, values)
         semantic_score = semantic.get(thing.id, 0.0)

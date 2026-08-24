@@ -7,9 +7,15 @@ from pydantic import ValidationError
 from pypdf import PdfWriter
 
 from openlab.demo_seed import COMMON_MODULES
-from openlab.intelligence import BuildBreakdown, _manual_breakdown, _valid_vector
+from openlab.intelligence import (
+    BuildBreakdown,
+    _inventory_retrieval_values,
+    _manual_breakdown,
+    _token_score,
+    _valid_vector,
+)
 from openlab.main import app, confirm_candidate_identity, update_candidate_proposal
-from openlab.models import InboxCandidate
+from openlab.models import InboxCandidate, Thing
 from openlab.providers import OpenAICompatibleProvider, ProviderError
 from openlab.schemas import InboxCandidateConfirm, InboxCandidateInput, InboxCandidatePatch
 from openlab.schematics import WiringProposal, export_kicad_schematic
@@ -160,6 +166,23 @@ def test_plant_monitor_fallback_uses_functional_inventory_roles(monkeypatch) -> 
         "indicator",
     ]
     assert breakdown.roles[0].required_capabilities == ["soil moisture sensing"]
+
+
+def test_inventory_text_retrieval_includes_capabilities_and_interfaces() -> None:
+    thing = Thing(
+        lab_id="lab",
+        name="WS2812B 8-LED Ring",
+        category="module",
+        metadata_json={"description": "Addressable RGB LED ring."},
+    )
+    values = _inventory_retrieval_values(
+        thing,
+        ["NeoPixel ring"],
+        ["RGB lighting", "visual indicator"],
+        ["single-wire digital"],
+    )
+    assert _token_score("visual indicator", values) == 1
+    assert "single-wire digital" in values
 
 
 def test_canonical_profile_contains_only_approved_retrieval_fields() -> None:
