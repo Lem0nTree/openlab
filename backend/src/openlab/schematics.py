@@ -278,10 +278,28 @@ def validate_wiring(
         if power_inputs and not any(pin.id in connected for pin in power_inputs):
             errors.append(f"{role_key}: no power input pin is connected")
 
+    connected_i2c_roles = {
+        role_key
+        for role_key, connected_pin_ids in connected_roles.items()
+        if any(
+            _pin_signals(pins_by_id[pin_id]).intersection({"SDA", "SCL"})
+            for pin_id in connected_pin_ids
+        )
+    }
+    connected_i2c_signals = {
+        signal
+        for pin_id in used
+        for signal in _pin_signals(pins_by_id[pin_id])
+        if signal in {"SDA", "SCL"}
+    }
     addresses: dict[str, list[str]] = {}
     has_i2c = False
     pullups_present = False
     for role_key, thing_id in role_to_thing.items():
+        # A selected controller can expose many optional interfaces. Only validate
+        # I2C completeness when this wiring proposal actually uses its I2C pins.
+        if role_key not in connected_i2c_roles:
+            continue
         for interface in db.scalars(
             select(ThingInterface).where(
                 ThingInterface.thing_id == thing_id, func.lower(ThingInterface.kind) == "i2c"
@@ -306,8 +324,7 @@ def validate_wiring(
                 f"I2C address {address} is shared by {', '.join(sorted(shared_bus_roles))}"
             )
     required_support = list(proposal.required_support)
-    net_names = {net.name.upper() for net in proposal.nets}
-    if has_i2c and {"SDA", "SCL"}.issubset(net_names) and not pullups_present:
+    if has_i2c and {"SDA", "SCL"}.issubset(connected_i2c_signals) and not pullups_present:
         warning = "Confirm that the I2C bus has suitable pull-up resistors"
         warnings.append(warning)
         required_support.append("I2C pull-up resistors if not already present on a selected module")
