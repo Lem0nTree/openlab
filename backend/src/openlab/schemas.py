@@ -39,6 +39,41 @@ class LabOut(APIModel):
     units: str
 
 
+class LabSettingsInput(StrictInput):
+    name: str = Field(min_length=1, max_length=200)
+    units: Literal["metric", "imperial"]
+
+
+class KicadSettingsInput(StrictInput):
+    cli_path: str | None = Field(default=None, max_length=500)
+
+
+class KicadSettingsOut(BaseModel):
+    cli_path: str | None
+    effective_cli: str | None
+    source: Literal["settings", "environment", "unset"]
+    check_status: Literal["unknown", "queued", "running", "available", "unavailable"]
+    version: str | None
+    error: str | None
+
+
+class EnvironmentVariableOut(BaseModel):
+    name: str
+    category: Literal["application", "security", "infrastructure"]
+    status: Literal["configured", "not_configured", "deployment_managed"]
+    value: str | None = None
+    secret: bool = False
+    editable: bool = False
+    restart_required: bool = True
+    description: str
+
+
+class SettingsOverviewOut(BaseModel):
+    lab: LabOut
+    kicad: KicadSettingsOut
+    environment: list[EnvironmentVariableOut]
+
+
 class ThingCreate(BaseModel):
     name: str = Field(min_length=1, max_length=300)
     category: str = Field(default="uncategorized", max_length=120)

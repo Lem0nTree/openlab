@@ -51,6 +51,7 @@ class Lab(Base, Timestamped):
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     units: Mapped[str] = mapped_column(String(20), default="metric", nullable=False)
+    kicad_cli: Mapped[str | None] = mapped_column(String(500))
 
 
 class User(Base, Timestamped):

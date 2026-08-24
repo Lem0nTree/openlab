@@ -26,6 +26,7 @@ services:
       OPENLAB_ENCRYPTION_KEY: ${OPENLAB_ENCRYPTION_KEY:-}
       OPENLAB_SETUP_TOKEN: ${OPENLAB_SETUP_TOKEN:-}
       OPENLAB_PUBLIC_URL: ${OPENLAB_PUBLIC_URL:-}
+      OPENLAB_KICAD_CLI: ${OPENLAB_KICAD_CLI:-}
     volumes:
       - openlab-data:/var/lib/openlab
     depends_on:

@@ -14,10 +14,11 @@ from .intelligence import (
     embed_thing,
     plan_build,
 )
-from .models import InboxItem, Job
+from .models import InboxItem, Job, Lab
 from .providers import ProviderError
 from .schematics import propose_schematic
 from .services import cleanup_expired_attachments, process_inbox_item
+from .system_settings import check_kicad_cli, effective_kicad_cli
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 logger = logging.getLogger("openlab.worker")
@@ -81,6 +82,12 @@ def run_job(job_id: str) -> None:
                     str(job.payload["notes"]) if job.payload.get("notes") else None,
                 )
                 complete_job(job, result, temporary=True)
+            elif job.kind == "system.kicad_check":
+                lab = db.get(Lab, job.lab_id)
+                cli, source = effective_kicad_cli(lab)
+                result = check_kicad_cli(cli)
+                result["source"] = source
+                complete_job(job, result)
             else:
                 raise ProviderError(f"No enabled handler for job kind: {job.kind}")
         except ProviderError as exc:

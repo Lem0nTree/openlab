@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
+import { api, type LabSettings } from "@/lib/api";
 import { LabIcon, type LabIconName } from "./lab-icon";
 
 const navItems: { href: string; label: string; icon: LabIconName }[] = [
@@ -17,10 +18,17 @@ type ShellSignal = { label: string; tone: "ready" | "offline" | "checking" | "se
 
 export function Shell({ title, children, signal }: { title: string; children: ReactNode; signal?: ShellSignal }) {
   const pathname = usePathname();
+  const [labName, setLabName] = useState("HOME BENCH");
+  useEffect(() => {
+    api<LabSettings>("/lab").then((lab) => setLabName(lab.name)).catch(() => undefined);
+    const update = (event: Event) => setLabName((event as CustomEvent<{ name: string }>).detail.name);
+    window.addEventListener("openlab:lab-updated", update);
+    return () => window.removeEventListener("openlab:lab-updated", update);
+  }, []);
   return <main className="app-frame">
     <header className="topbar">
       <Link href="/" className="brand"><span className="brand-mark"><LabIcon name="spark" /></span><span>Open<span>Lab</span></span></Link>
-      <span className="lab-context"><span>LAB /</span> HOME BENCH</span>
+      <span className="lab-context"><span>LAB /</span> {labName.toUpperCase()}</span>
       <div className="topbar-actions"><span className="local-status"><i />LAB ONLINE</span><Link href="/settings" className="icon-link" aria-label="Settings"><LabIcon name="settings" /></Link></div>
     </header>
     <div className="shell">

@@ -72,9 +72,12 @@ from .schemas import (
     InboxEnrichURL,
     InboxOut,
     JobOut,
+    KicadSettingsInput,
+    KicadSettingsOut,
     KnowledgeSearchRequest,
     KnowledgeSearchResult,
     LabOut,
+    LabSettingsInput,
     LocationCreate,
     LocationOut,
     LocationQRInfo,
@@ -91,6 +94,7 @@ from .schemas import (
     RequirementCreate,
     SchematicAccept,
     SchematicRequest,
+    SettingsOverviewOut,
     SetupRequest,
     StockAdjustment,
     StockMovementDetailOut,
@@ -120,6 +124,7 @@ from .services import (
     refresh_inbox_status,
     save_upload,
 )
+from .system_settings import effective_kicad_cli, normalize_kicad_cli
 
 settings = get_settings()
 bootstrap_token = settings.setup_token or token_urlsafe(24)
@@ -160,7 +165,7 @@ def require_idempotency(value: str | None = Header(default=None, alias="Idempote
 
 def require_owner(user: User = Depends(current_user)) -> User:
     if not user.is_owner:
-        raise HTTPException(status_code=403, detail="Only the lab owner may configure AI")
+        raise HTTPException(status_code=403, detail="Only the lab owner may change settings")
     return user
 
 
@@ -175,6 +180,90 @@ def provider_out(config: ProviderConfig) -> dict[str, object]:
         "embeddings_enabled": config.embeddings_enabled,
         "has_api_key": config.secret_ciphertext is not None,
         "egress": "local" if is_local_endpoint(config.base_url) else "external",
+    }
+
+
+def deployment_environment() -> list[dict[str, object]]:
+    def item(
+        name: str,
+        category: str,
+        description: str,
+        *,
+        configured: bool | None = None,
+        value: object | None = None,
+        secret: bool = False,
+        editable: bool = False,
+        restart_required: bool = True,
+    ) -> dict[str, object]:
+        status = (
+            "deployment_managed"
+            if configured is None
+            else "configured"
+            if configured
+            else "not_configured"
+        )
+        return {
+            "name": name,
+            "category": category,
+            "status": status,
+            "value": None if secret or value is None else str(value),
+            "secret": secret,
+            "editable": editable,
+            "restart_required": restart_required,
+            "description": description,
+        }
+
+    return [
+        item("OPENLAB_KICAD_CLI", "application", "Optional worker-container fallback for KiCad ERC.", configured=bool(settings.kicad_cli), value=settings.kicad_cli, editable=True, restart_required=False),
+        item("OPENLAB_PUBLIC_URL", "application", "Stable browser URL used by drawer QR labels.", configured=bool(settings.public_url), value=settings.public_url),
+        item("OPENLAB_DATA_DIR", "infrastructure", "Persistent attachment storage inside the server and worker.", configured=True, value=settings.data_dir),
+        item("SESSION_HOURS", "application", "Session lifetime for newly created login sessions.", configured=True, value=settings.session_hours),
+        item("UPLOAD_MAX_BYTES", "application", "Maximum accepted Inbox attachment size in bytes.", configured=True, value=settings.upload_max_bytes),
+        item("DATABASE_URL", "infrastructure", "PostgreSQL connection string.", configured=bool(settings.database_url), secret=True),
+        item("OPENLAB_SECRET_KEY", "security", "Session-signing secret generated during bootstrap.", configured=settings.secret_key != "development-only-change-me", secret=True),
+        item("OPENLAB_ENCRYPTION_KEY", "security", "Encryption key for stored provider credentials.", configured=bool(settings.encryption_key), secret=True),
+        item("OPENLAB_SETUP_TOKEN", "security", "Optional stable first-owner setup token.", configured=bool(settings.setup_token), secret=True),
+        item("OPENLAB_API_INTERNAL_URL", "infrastructure", "Next.js-to-API routing configured by the web deployment."),
+        item("POSTGRES_DB / USER / PASSWORD", "infrastructure", "PostgreSQL container bootstrap values managed by Compose.", secret=True),
+    ]
+
+
+def kicad_settings_out(db: Session, lab: Lab, *, include_latest: bool = True) -> dict[str, object]:
+    cli, source = effective_kicad_cli(lab, settings)
+    status = "unknown"
+    version = None
+    error = None
+    if include_latest:
+        latest = db.scalar(
+            select(Job)
+            .where(Job.lab_id == lab.id, Job.kind == "system.kicad_check")
+            .order_by(Job.created_at.desc())
+        )
+        if latest:
+            if latest.status in {"queued", "running"}:
+                status = latest.status
+            elif latest.status == "completed" and latest.result:
+                status = str(latest.result.get("status", "unavailable"))
+                version = latest.result.get("version")
+                error = latest.result.get("error")
+            else:
+                status = "unavailable"
+                error = latest.last_error or "KiCad capability check did not complete"
+    return {
+        "cli_path": lab.kicad_cli,
+        "effective_cli": cli,
+        "source": source,
+        "check_status": status,
+        "version": version,
+        "error": error,
+    }
+
+
+def settings_overview_out(db: Session, lab: Lab) -> dict[str, object]:
+    return {
+        "lab": lab,
+        "kicad": kicad_settings_out(db, lab),
+        "environment": deployment_environment(),
     }
 
 
@@ -258,6 +347,95 @@ def lab(user: User = Depends(current_user), db: Session = Depends(get_db)) -> La
     if value is None:
         raise HTTPException(status_code=404, detail="Lab not found")
     return value
+
+
+@app.get("/api/v1/settings", response_model=SettingsOverviewOut)
+def get_settings_overview(
+    user: User = Depends(require_owner), db: Session = Depends(get_db)
+) -> dict[str, object]:
+    value = db.get(Lab, lab_for_user(db, user))
+    if value is None:
+        raise HTTPException(status_code=404, detail="Lab not found")
+    return settings_overview_out(db, value)
+
+
+@app.put(
+    "/api/v1/settings/lab", response_model=LabOut, dependencies=[Depends(require_csrf)]
+)
+def save_lab_settings(
+    payload: LabSettingsInput,
+    user: User = Depends(require_owner),
+    db: Session = Depends(get_db),
+) -> Lab:
+    value = db.get(Lab, lab_for_user(db, user))
+    if value is None:
+        raise HTTPException(status_code=404, detail="Lab not found")
+    name = payload.name.strip()
+    if not name:
+        raise HTTPException(status_code=422, detail="Lab name cannot be blank")
+    value.name = name
+    value.units = payload.units
+    audit(db, user, "settings.lab_updated", "lab", value.id, units=value.units)
+    db.commit()
+    db.refresh(value)
+    return value
+
+
+@app.put(
+    "/api/v1/settings/kicad",
+    response_model=KicadSettingsOut,
+    dependencies=[Depends(require_csrf)],
+)
+def save_kicad_settings(
+    payload: KicadSettingsInput,
+    user: User = Depends(require_owner),
+    db: Session = Depends(get_db),
+) -> dict[str, object]:
+    value = db.get(Lab, lab_for_user(db, user))
+    if value is None:
+        raise HTTPException(status_code=404, detail="Lab not found")
+    try:
+        value.kicad_cli = normalize_kicad_cli(payload.cli_path)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    audit(
+        db,
+        user,
+        "settings.kicad_updated",
+        "lab",
+        value.id,
+        configured=value.kicad_cli is not None,
+    )
+    db.commit()
+    db.refresh(value)
+    return kicad_settings_out(db, value, include_latest=False)
+
+
+@app.post(
+    "/api/v1/settings/kicad/check",
+    response_model=JobOut,
+    status_code=202,
+    dependencies=[Depends(require_csrf)],
+)
+def queue_kicad_check(
+    user: User = Depends(require_owner), db: Session = Depends(get_db)
+) -> Job:
+    lab_id = lab_for_user(db, user)
+    pending = db.scalar(
+        select(Job).where(
+            Job.lab_id == lab_id,
+            Job.kind == "system.kicad_check",
+            Job.status.in_(["queued", "running"]),
+        )
+    )
+    if pending:
+        return pending
+    job = Job(lab_id=lab_id, kind="system.kicad_check", payload={})
+    db.add(job)
+    db.flush()
+    audit(db, user, "settings.kicad_check_queued", "lab", lab_id, job_id=job.id)
+    db.commit()
+    return job
 
 
 @app.get("/api/v1/ai/provider", response_model=ProviderConfigOut | None)
