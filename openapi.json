@@ -1763,7 +1763,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/ProjectStatusUpdate"
+                "$ref": "#/components/schemas/ProjectUpdate"
               }
             }
           }
@@ -5771,26 +5771,55 @@
         ],
         "title": "ProjectOut"
       },
-      "ProjectStatusUpdate": {
+      "ProjectUpdate": {
         "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 300,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
           "status": {
-            "type": "string",
-            "enum": [
-              "pending",
-              "active",
-              "completed",
-              "archived",
-              "cancelled"
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "pending",
+                  "active",
+                  "completed",
+                  "archived",
+                  "cancelled"
+                ]
+              },
+              {
+                "type": "null"
+              }
             ],
             "title": "Status"
           }
         },
         "additionalProperties": false,
         "type": "object",
-        "required": [
-          "status"
-        ],
-        "title": "ProjectStatusUpdate"
+        "title": "ProjectUpdate"
       },
       "ProviderConfigInput": {
         "properties": {

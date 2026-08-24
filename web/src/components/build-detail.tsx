@@ -76,6 +76,9 @@ export function BuildDetail({ projectId }: { projectId: string }) {
   const [pinouts, setPinouts] = useState<Record<string, Pin[]>>({});
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [editingDetails, setEditingDetails] = useState(false);
+  const [editName, setEditName] = useState("");
+  const [editDescription, setEditDescription] = useState("");
 
   const load = useCallback(async () => {
     try {
@@ -110,12 +113,35 @@ export function BuildDetail({ projectId }: { projectId: string }) {
     return () => window.clearInterval(timer);
   }, [hasActiveJob, load]);
 
-  async function mutate(action: () => Promise<unknown>) {
+  async function mutate(action: () => Promise<unknown>): Promise<boolean> {
     setBusy(true);
     setError("");
-    try { await action(); await load(); }
-    catch (nextError) { setError((nextError as Error).message); }
+    try { await action(); await load(); return true; }
+    catch (nextError) { setError((nextError as Error).message); return false; }
     finally { setBusy(false); }
+  }
+
+  function startEditingDetails() {
+    if (!detail) return;
+    setEditName(detail.name);
+    setEditDescription(detail.description ?? "");
+    setError("");
+    setEditingDetails(true);
+  }
+
+  async function saveDetails(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!detail) return;
+    const name = editName.trim();
+    if (!name) {
+      setError("A build title is required.");
+      return;
+    }
+    const saved = await mutate(() => api(`/projects/${detail.id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ name, description: editDescription.trim() || null }),
+    }));
+    if (saved) setEditingDetails(false);
   }
 
   async function generatePlan() {
@@ -193,7 +219,7 @@ export function BuildDetail({ projectId }: { projectId: string }) {
 
   return <Shell title="Build workspace">
     <div className="build-detail-nav"><Link href="/projects">← All builds</Link><div className="build-status-actions"><span className={`build-status is-${detail.status}`}><i/>{detail.status}</span><button className="secondary-button" disabled={busy || detail.status === "pending"} onClick={() => void setStatus("pending")}>Pending</button><button className="secondary-button" disabled={busy || detail.status === "active"} onClick={() => void setStatus("active")}>Active</button><button disabled={busy || detail.status === "completed"} onClick={() => void setStatus("completed")}>Complete</button></div></div>
-    <section className="build-detail-hero"><div><p className="eyebrow">BUILD / {detail.id.slice(0, 8).toUpperCase()}</p><h2>{detail.name}</h2><p>{detail.description || "No purpose recorded yet."}</p></div><div className="build-health"><span><small>SOLUTION</small><strong>{acceptedSolution ? "Selected" : "Pending"}</strong></span><span><small>PINOUTS</small><strong>{selectedRequirements.length ? `${selectedRequirements.length - missingPinouts.length}/${selectedRequirements.length}` : "—"}</strong></span><span><small>WIRING</small><strong>{validation?.status?.replaceAll("_", " ") ?? "Not run"}</strong></span><span><small>COST</small><strong>{pricedCount ? `€${knownCost.toFixed(2)}` : "Not recorded"}</strong></span></div></section>
+    <section className="build-detail-hero"><div className="build-detail-hero-copy"><p className="eyebrow">BUILD / {detail.id.slice(0, 8).toUpperCase()}</p>{editingDetails ? <form className="build-details-form" onSubmit={saveDetails}><label htmlFor="build-title">Title<input id="build-title" value={editName} onChange={(event) => setEditName(event.target.value)} maxLength={300} autoFocus required/></label><label htmlFor="build-purpose">Purpose<textarea id="build-purpose" value={editDescription} onChange={(event) => setEditDescription(event.target.value)} maxLength={2000} rows={3} placeholder="What are you building?"/></label><div className="build-details-actions"><button type="submit" disabled={busy}>Save changes</button><button type="button" className="secondary-button" disabled={busy} onClick={() => setEditingDetails(false)}>Cancel</button></div></form> : <><div className="build-title-row"><h2>{detail.name}</h2><button type="button" className="build-edit-button" aria-label="Edit build title and purpose" title="Edit build title and purpose" onClick={startEditingDetails}><LabIcon name="edit"/></button></div><p>{detail.description || "No purpose recorded yet."}</p></>}</div><div className="build-health"><span><small>SOLUTION</small><strong>{acceptedSolution ? "Selected" : "Pending"}</strong></span><span><small>PINOUTS</small><strong>{selectedRequirements.length ? `${selectedRequirements.length - missingPinouts.length}/${selectedRequirements.length}` : "—"}</strong></span><span><small>WIRING</small><strong>{validation?.status?.replaceAll("_", " ") ?? "Not run"}</strong></span><span><small>COST</small><strong>{pricedCount ? `€${knownCost.toFixed(2)}` : "Not recorded"}</strong></span></div></section>
     {error && <p className="error build-error">{error}</p>}
 
     <div className="build-detail-grid">

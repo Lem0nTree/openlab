@@ -1219,13 +1219,14 @@ export interface components {
              */
             updated_at: string;
         };
-        /** ProjectStatusUpdate */
-        ProjectStatusUpdate: {
-            /**
-             * Status
-             * @enum {string}
-             */
-            status: "pending" | "active" | "completed" | "archived" | "cancelled";
+        /** ProjectUpdate */
+        ProjectUpdate: {
+            /** Name */
+            name?: string | null;
+            /** Description */
+            description?: string | null;
+            /** Status */
+            status?: ("pending" | "active" | "completed" | "archived" | "cancelled") | null;
         };
         /**
          * ProviderConfigInput
@@ -2411,7 +2412,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["ProjectStatusUpdate"];
+                "application/json": components["schemas"]["ProjectUpdate"];
             };
         };
         responses: {

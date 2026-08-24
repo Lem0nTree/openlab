@@ -82,7 +82,7 @@ from .schemas import (
     ProjectCreate,
     ProjectDetailOut,
     ProjectOut,
-    ProjectStatusUpdate,
+    ProjectUpdate,
     ProviderConfigInput,
     ProviderConfigOut,
     ProviderModelsOut,
@@ -1049,7 +1049,7 @@ def create_project(
 )
 def update_project_status(
     project_id: str,
-    payload: ProjectStatusUpdate,
+    payload: ProjectUpdate,
     user: User = Depends(current_user),
     db: Session = Depends(get_db),
 ) -> Project:
@@ -1060,9 +1060,28 @@ def update_project_status(
     )
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
-    project.status = payload.status
+    changed_fields: list[str] = []
+    if payload.name is not None:
+        name = payload.name.strip()
+        if not name:
+            raise HTTPException(status_code=422, detail="Project name cannot be blank")
+        project.name = name
+        changed_fields.append("name")
+    if "description" in payload.model_fields_set:
+        project.description = (
+            payload.description.strip() if payload.description and payload.description.strip() else None
+        )
+        changed_fields.append("description")
+    if payload.status is not None:
+        project.status = payload.status
+        changed_fields.append("status")
+    if not changed_fields:
+        raise HTTPException(status_code=400, detail="At least one project field is required")
     project.revision += 1
-    audit(db, user, "project.status_updated", "project", project.id, status=payload.status)
+    if changed_fields == ["status"]:
+        audit(db, user, "project.status_updated", "project", project.id, status=payload.status)
+    else:
+        audit(db, user, "project.updated", "project", project.id, fields=changed_fields)
     db.commit()
     return project
 
