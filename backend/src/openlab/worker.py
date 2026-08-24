@@ -7,6 +7,7 @@ from datetime import UTC, datetime, timedelta
 from sqlalchemy import or_, select
 
 from .db import SessionLocal
+from .enrichment import enrich_thing
 from .intelligence import (
     cleanup_expired_job_results,
     complete_job,
@@ -60,6 +61,9 @@ def run_job(job_id: str) -> None:
                 complete_job(job, {"inbox_id": inbox.id})
             elif job.kind == "thing.embed":
                 result = embed_thing(db, job.lab_id, str(job.payload.get("thing_id", "")))
+                complete_job(job, result)
+            elif job.kind == "thing.enrich":
+                result = enrich_thing(db, job.lab_id, str(job.payload.get("thing_id", "")))
                 complete_job(job, result)
             elif job.kind == "project.plan":
                 result = plan_build(

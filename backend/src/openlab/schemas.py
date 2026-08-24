@@ -238,6 +238,12 @@ class ProjectOut(APIModel):
     description: str | None
     status: str
     revision: int
+    created_at: datetime
+    updated_at: datetime
+
+
+class ProjectStatusUpdate(StrictInput):
+    status: Literal["pending", "active", "completed", "archived", "cancelled"]
 
 
 class RequirementOut(APIModel):

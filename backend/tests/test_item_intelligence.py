@@ -7,6 +7,7 @@ from pydantic import ValidationError
 from pypdf import PdfWriter
 
 from openlab.demo_seed import COMMON_MODULES
+from openlab.enrichment import CATALOG_SOURCE, curated_pinout_for
 from openlab.intelligence import (
     BuildBreakdown,
     _decompose_build,
@@ -52,6 +53,7 @@ def test_openapi_registers_item_intelligence_routes() -> None:
     assert "/api/v1/projects/{project_id}/plan" in paths
     assert "/api/v1/projects/{project_id}/schematic" in paths
     assert "/api/v1/projects/{project_id}/jobs" in paths
+    assert "/api/v1/projects/{project_id}/enrich" in paths
     assert "/api/v1/things/{thing_id}/pins" in paths
     candidate_path = "/api/v1/inbox/{inbox_id}/candidates/{candidate_id}"
     assert {"patch", "delete"}.issubset(paths[candidate_path])
@@ -203,6 +205,28 @@ def test_inventory_text_retrieval_includes_capabilities_and_interfaces() -> None
     )
     assert _token_score("visual indicator", values) == 1
     assert "single-wire digital" in values
+
+
+def test_curated_pin_enrichment_is_exact_and_does_not_guess_unknown_modules() -> None:
+    sensor = Thing(
+        lab_id="lab",
+        name="Capacitive Soil Moisture Sensor",
+        category="sensor",
+        metadata_json={"demo_seed_key": "soil-capacitive"},
+    )
+    pins = curated_pinout_for(sensor)
+    assert pins is not None
+    assert [pin.name for pin in pins] == ["VCC", "GND", "AOUT"]
+    assert pins[2].electrical_type == "output"
+    assert CATALOG_SOURCE.startswith("openlab:curated-common-modules")
+
+    unknown = Thing(
+        lab_id="lab",
+        name="Unknown clone board",
+        category="board",
+        metadata_json={},
+    )
+    assert curated_pinout_for(unknown) is None
 
 
 def test_canonical_profile_contains_only_approved_retrieval_fields() -> None:

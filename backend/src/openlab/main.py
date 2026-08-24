@@ -19,6 +19,7 @@ from sqlalchemy.orm import Session
 
 from .config import get_settings
 from .db import get_db
+from .enrichment import enrich_thing, queue_thing_enrichment
 from .intelligence import accept_build_plan, queue_thing_embedding, search_inventory
 from .models import (
     Allocation,
@@ -81,6 +82,7 @@ from .schemas import (
     ProjectCreate,
     ProjectDetailOut,
     ProjectOut,
+    ProjectStatusUpdate,
     ProviderConfigInput,
     ProviderConfigOut,
     ProviderModelsOut,
@@ -613,6 +615,8 @@ def get_project(
         "description": project.description,
         "status": project.status,
         "revision": project.revision,
+        "created_at": project.created_at,
+        "updated_at": project.updated_at,
         "design_json": project.design_json,
         "requirements": list(
             db.scalars(select(Requirement).where(Requirement.project_id == project.id)).all()
@@ -800,6 +804,7 @@ def confirm_candidate_identity(
     )
     candidate.thing_id = thing.id
     candidate.status = "confirmed"
+    queue_thing_enrichment(db, thing.lab_id, thing.id)
     queue_thing_embedding(db, thing.lab_id, thing.id)
     refresh_inbox_status(db, item)
     audit(db, user, "inbox.candidate_confirmed", "inbox_candidate", candidate.id, thing_id=thing.id)
@@ -1025,13 +1030,41 @@ def create_project(
     payload: ProjectCreate, user: User = Depends(current_user), db: Session = Depends(get_db)
 ) -> Project:
     item = Project(
-        lab_id=lab_for_user(db, user), name=payload.name, description=payload.description
+        lab_id=lab_for_user(db, user),
+        name=payload.name,
+        description=payload.description,
+        status="pending",
     )
     db.add(item)
     db.flush()
     audit(db, user, "project.created", "project", item.id)
     db.commit()
     return item
+
+
+@app.patch(
+    "/api/v1/projects/{project_id}",
+    response_model=ProjectOut,
+    dependencies=[Depends(require_csrf)],
+)
+def update_project_status(
+    project_id: str,
+    payload: ProjectStatusUpdate,
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+) -> Project:
+    project = db.scalar(
+        select(Project)
+        .where(Project.id == project_id, Project.lab_id == lab_for_user(db, user))
+        .with_for_update(of=Project)
+    )
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    project.status = payload.status
+    project.revision += 1
+    audit(db, user, "project.status_updated", "project", project.id, status=payload.status)
+    db.commit()
+    return project
 
 
 @app.post(
@@ -1259,7 +1292,7 @@ def list_project_jobs(
             select(Job)
             .where(
                 Job.lab_id == lab_id,
-                Job.kind.in_(["project.plan", "project.schematic"]),
+                Job.kind.in_(["project.plan", "project.schematic", "thing.enrich"]),
                 Job.payload["project_id"].astext == project.id,
             )
             .order_by(Job.created_at.desc())
@@ -1331,6 +1364,18 @@ def accept_project_plan(
         accept_build_plan(db, project, job, payload.solution_id, payload.revision)
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
+    selected_thing_ids = set(
+        db.scalars(
+            select(Requirement.selected_thing_id).where(
+                Requirement.project_id == project.id,
+                Requirement.selected_thing_id.is_not(None),
+            )
+        ).all()
+    )
+    for thing_id in selected_thing_ids:
+        if thing_id:
+            queue_thing_enrichment(db, project.lab_id, thing_id, project.id)
+    project.status = "active"
     audit(
         db,
         user,
@@ -1342,6 +1387,41 @@ def accept_project_plan(
     )
     db.commit()
     return get_project(project.id, user, db)
+
+
+@app.post(
+    "/api/v1/projects/{project_id}/enrich",
+    response_model=list[JobOut],
+    status_code=202,
+    dependencies=[Depends(require_csrf)],
+)
+def queue_project_enrichment(
+    project_id: str,
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+) -> list[Job]:
+    project = db.scalar(
+        select(Project).where(Project.id == project_id, Project.lab_id == lab_for_user(db, user))
+    )
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    thing_ids = set(
+        db.scalars(
+            select(Requirement.selected_thing_id).where(
+                Requirement.project_id == project.id,
+                Requirement.selected_thing_id.is_not(None),
+            )
+        ).all()
+    )
+    jobs = [
+        queue_thing_enrichment(db, project.lab_id, thing_id, project.id)
+        for thing_id in thing_ids
+        if thing_id
+        and not db.scalar(select(func.count(Pin.id)).where(Pin.thing_id == thing_id))
+    ]
+    audit(db, user, "project.enrichment_queued", "project", project.id, job_count=len(jobs))
+    db.commit()
+    return jobs
 
 
 @app.get("/api/v1/things/{thing_id}/pins", response_model=list[PinOut])
@@ -1405,6 +1485,17 @@ def queue_schematic(
             status_code=409,
             detail="This BUILD solution has no owned components to wire",
         )
+    selected_thing_ids = set(
+        db.scalars(
+            select(Requirement.selected_thing_id).where(
+                Requirement.project_id == project.id,
+                Requirement.selected_thing_id.is_not(None),
+            )
+        ).all()
+    )
+    for thing_id in selected_thing_ids:
+        if thing_id and not db.scalar(select(func.count(Pin.id)).where(Pin.thing_id == thing_id)):
+            enrich_thing(db, project.lab_id, thing_id)
     job = Job(
         lab_id=project.lab_id,
         kind="project.schematic",

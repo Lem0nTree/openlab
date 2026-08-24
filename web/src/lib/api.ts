@@ -11,11 +11,12 @@ export type Location = { id: string; name: string; parent_id: string | null; pub
 export type InboxItem = { id: string; input_type: string; status: string; text: string | null; error: string | null; processing_evidence: Record<string, unknown>; created_at: string };
 export type InboxCandidate = { id: string; name: string; quantity: string; category: string; identity_confidence: string; status: string; thing_id: string | null; product_url: string | null; provenance: Record<string, unknown> };
 export type ProviderConfig = { id: string; provider: string; base_url: string; model: string; embedding_model: string | null; enabled: boolean; embeddings_enabled: boolean; has_api_key: boolean; egress: "local" | "external" };
-export type Project = { id: string; name: string; description: string | null; status: string; revision: number };
+export type Project = { id: string; name: string; description: string | null; status: string; revision: number; created_at: string; updated_at: string };
 export type Requirement = { id: string; name: string; quantity: string; priority: string; constraints: Record<string, unknown>; source: string; role_key: string | null; selected_thing_id: string | null; match_status: string | null };
 export type Allocation = { id: string; thing_id: string; location_id: string | null; quantity: string; state: string };
 export type ProjectDetail = Project & { requirements: Requirement[]; allocations: Allocation[]; design_json: Record<string, unknown> };
 export type Job = { id: string; kind: string; status: string; result: Record<string, unknown> | null; attempts: number; last_error: string | null; expires_at: string | null };
+export type Pin = { id: string; name: string; role: string; number: string | null; electrical_type: string; alternate_functions: string[]; restrictions: string | null; details: Record<string, unknown>; source_ref: string | null; verification_state: string };
 
 function csrfToken(): string | undefined {
   return document.cookie.split("; ").find((value) => value.startsWith("openlab_csrf="))?.split("=")[1];

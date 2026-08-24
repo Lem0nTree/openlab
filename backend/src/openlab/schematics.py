@@ -119,7 +119,20 @@ def _deterministic_wiring(
         for pin_data in pins_value:
             if isinstance(pin_data, dict):
                 role_by_pin[str(pin_data["id"])] = role_key
-    signals = ["GND", "SDA", "SCL", "MOSI", "MISO", "SCLK", "CS", "3V3", "5V", "VCC"]
+    signals = [
+        "GND",
+        "SDA",
+        "SCL",
+        "MOSI",
+        "MISO",
+        "SCLK",
+        "CS",
+        "ANALOG",
+        "DATA",
+        "3V3",
+        "5V",
+        "VCC",
+    ]
     nets: list[WireNet] = []
     used: set[str] = set()
     for signal in signals:

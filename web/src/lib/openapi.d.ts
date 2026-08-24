@@ -316,7 +316,8 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        patch?: never;
+        /** Update Project Status */
+        patch: operations["update_project_status_api_v1_projects__project_id__patch"];
         trace?: never;
     };
     "/api/v1/inbox/{inbox_id}/attachments": {
@@ -655,6 +656,23 @@ export interface paths {
         put?: never;
         /** Accept Project Plan */
         post: operations["accept_project_plan_api_v1_projects__project_id__plan_accept_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{project_id}/enrich": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Queue Project Enrichment */
+        post: operations["queue_project_enrichment_api_v1_projects__project_id__enrich_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1159,6 +1177,16 @@ export interface components {
             status: string;
             /** Revision */
             revision: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
             /** Requirements */
             requirements: components["schemas"]["RequirementOut"][];
             /** Allocations */
@@ -1180,6 +1208,24 @@ export interface components {
             status: string;
             /** Revision */
             revision: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /** ProjectStatusUpdate */
+        ProjectStatusUpdate: {
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "pending" | "active" | "completed" | "archived" | "cancelled";
         };
         /**
          * ProviderConfigInput
@@ -2349,6 +2395,46 @@ export interface operations {
             };
         };
     };
+    update_project_status_api_v1_projects__project_id__patch: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
+            path: {
+                project_id: string;
+            };
+            cookie?: {
+                openlab_csrf?: string | null;
+                openlab_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProjectStatusUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     upload_inbox_attachment_api_v1_inbox__inbox_id__attachments_post: {
         parameters: {
             query?: never;
@@ -3187,6 +3273,42 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ProjectDetailOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    queue_project_enrichment_api_v1_projects__project_id__enrich_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
+            path: {
+                project_id: string;
+            };
+            cookie?: {
+                openlab_csrf?: string | null;
+                openlab_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobOut"][];
                 };
             };
             /** @description Validation Error */
