@@ -52,7 +52,18 @@ export function Projects() {
 
   async function select(id: string) {
     setPlanJob(null); setSchematicJob(null); setPlanning(false);
-    try { setDetail(await api<ProjectDetail>(`/projects/${id}`)); }
+    try {
+      const [nextDetail, jobs] = await Promise.all([
+        api<ProjectDetail>(`/projects/${id}`),
+        api<Job[]>(`/projects/${id}/jobs`),
+      ]);
+      const latestPlan = jobs.find((job) => job.kind === "project.plan") ?? null;
+      const latestSchematic = jobs.find((job) => job.kind === "project.schematic") ?? null;
+      setDetail(nextDetail);
+      setPlanJob(latestPlan);
+      setSchematicJob(latestSchematic);
+      setPlanning(Boolean([latestPlan, latestSchematic].some((job) => job && ["queued", "running"].includes(job.status))));
+    }
     catch (nextError) { setError((nextError as Error).message); }
   }
 
@@ -141,6 +152,7 @@ export function Projects() {
   const acceptedDesign = detail?.design_json;
   const acceptedSolution = acceptedDesign?.solution as { components?: unknown[] } | undefined;
   const canGenerateSchematic = (acceptedSolution?.components?.length ?? 0) > 0;
+  const planFailed = planJob?.status === "dead_letter" || planJob?.status === "expired";
 
   return <Shell title="Projects & BUILD">
     <section className="build-overview">
@@ -174,8 +186,9 @@ export function Projects() {
         <div className="project-detail-head"><div><p className="eyebrow">ACTIVE BUILD</p><h2>{detail.name}</h2><p>{detail.description || "Add requirements to start shaping this build."}</p></div><span className="build-status"><i/>{detail.status}</span></div>
 
         <section className="build-block build-planner">
-          <div className="build-block-heading"><span className="build-block-icon"><LabIcon name="spark"/></span><div><h3>BUILD intelligence</h3><p>Match the goal to owned items before making a buy list.</p></div><button type="button" onClick={() => void generatePlan()} disabled={planning}>{planning && planJob?.status !== "completed" ? "Planning…" : "Find best build"}</button></div>
-          {planJob?.last_error && <p className="error">{planJob.last_error}</p>}
+          <div className="build-block-heading"><span className="build-block-icon"><LabIcon name="spark"/></span><div><h3>BUILD intelligence</h3><p>Match the goal to owned items before making a buy list.</p></div><button type="button" onClick={() => void generatePlan()} disabled={planning}>{planning && planJob?.status !== "completed" ? "Planning…" : planFailed ? "Retry build plan" : "Find best build"}</button></div>
+          {planJob && <div className={`build-job-state is-${planJob.status}`}><span>Planner</span><strong>{planJob.status.replaceAll("_", " ")}</strong></div>}
+          {planFailed && <p className="error">The planner could not complete this build. Check the AI endpoint in Settings, then retry.</p>}
           {planSolutions.map((solution, index) => <article className="build-solution" key={solution.id}><div><strong>Solution {index + 1}</strong><small>{solution.components.length} inventory matches · {solution.missing_components.length} required to buy</small></div><div className="build-item-list">{solution.components.map((component) => <div className="build-item" key={component.role_key}><span>{component.quantity}×</span><strong>{component.thing_name}</strong><small>{component.role_key.replaceAll("_", " ")} · {component.match_status}</small></div>)}{solution.missing_components.map((component) => <div className="build-item missing" key={component.role_key}><span>{component.quantity}×</span><strong>{component.name}</strong><small>Component required</small></div>)}</div><button type="button" onClick={() => void acceptPlan(solution.id)} disabled={planning}>Use this solution</button></article>)}
           {planJob?.status === "completed" && planSolutions.length === 0 && <p className="build-empty-copy">No complete stock match was found. Add manual requirements or enrich inventory profiles, then try again.</p>}
           {Boolean(acceptedDesign?.status) && <div className="build-accepted"><strong>Accepted design</strong><span>{String(acceptedDesign?.status).replaceAll("_", " ")}</span></div>}

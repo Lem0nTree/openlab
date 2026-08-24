@@ -1242,6 +1242,32 @@ def get_job(job_id: str, user: User = Depends(current_user), db: Session = Depen
     return job
 
 
+@app.get("/api/v1/projects/{project_id}/jobs", response_model=list[JobOut])
+def list_project_jobs(
+    project_id: str,
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+) -> list[Job]:
+    lab_id = lab_for_user(db, user)
+    project = db.scalar(
+        select(Project).where(Project.id == project_id, Project.lab_id == lab_id)
+    )
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    return list(
+        db.scalars(
+            select(Job)
+            .where(
+                Job.lab_id == lab_id,
+                Job.kind.in_(["project.plan", "project.schematic"]),
+                Job.payload["project_id"].astext == project.id,
+            )
+            .order_by(Job.created_at.desc())
+            .limit(20)
+        ).all()
+    )
+
+
 @app.post(
     "/api/v1/projects/{project_id}/plan",
     response_model=JobOut,

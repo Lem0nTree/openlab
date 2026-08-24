@@ -116,13 +116,11 @@ export function Inbox() {
   useEffect(() => {
     const timer = window.setTimeout(() => void load(), 0);
     return () => window.clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   useEffect(() => {
     if (!items.some((item) => ["captured", "queued", "processing"].includes(item.status))) return;
     const timer = window.setInterval(() => void load(), 2000);
     return () => window.clearInterval(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [items]);
 
   async function request(path: string, init: RequestInit) {

@@ -44,6 +44,7 @@ def test_openapi_registers_item_intelligence_routes() -> None:
     assert "/api/v1/knowledge/search" in paths
     assert "/api/v1/projects/{project_id}/plan" in paths
     assert "/api/v1/projects/{project_id}/schematic" in paths
+    assert "/api/v1/projects/{project_id}/jobs" in paths
     assert "/api/v1/things/{thing_id}/pins" in paths
     candidate_path = "/api/v1/inbox/{inbox_id}/candidates/{candidate_id}"
     assert {"patch", "delete"}.issubset(paths[candidate_path])
