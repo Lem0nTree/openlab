@@ -27,6 +27,10 @@ class Settings(BaseSettings):
         default=None,
         validation_alias=AliasChoices("OPENLAB_ENCRYPTION_KEY", "ENCRYPTION_KEY"),
     )
+    public_url: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("OPENLAB_PUBLIC_URL", "PUBLIC_URL"),
+    )
     session_hours: int = 24 * 14
     upload_max_bytes: int = 25 * 1024 * 1024
     kicad_cli: str | None = Field(

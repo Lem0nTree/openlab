@@ -6,10 +6,9 @@ the first bounded BUILD and schematic proposal flows.
 
 ## MVP 0 — Core inventory
 
-- Thing image management and Thing detail/edit screens.
-- Stock adjustment, history, and dedicated mobile receive/move workflows.
-- QR scanning and print-label workflow; current labels are generated SVGs.
-- Full PostgreSQL fuzzy/full-text search and location-tree/detail screens.
+- Thing image management.
+- Dedicated camera-scanner and high-volume mobile receive/move workflows.
+- Full PostgreSQL fuzzy/full-text search.
 - Display-unit preferences and complete backup/restore validation/migration docs.
 
 ## MVP 1 — Inbox follow-through

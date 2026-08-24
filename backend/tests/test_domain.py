@@ -1,15 +1,22 @@
 from decimal import Decimal
+from unittest.mock import MagicMock
 
+import pytest
 from fastapi import HTTPException
+from pydantic import ValidationError
 
-from openlab.models import InboxStatus
+from openlab.models import InboxStatus, User
 from openlab.providers import OpenAICompatibleProvider, is_local_endpoint, parse_json_object
+from openlab.schemas import LocationCreate, StockAdjustment
 from openlab.services import (
     _safe_http_url,
+    adjustment_delta,
     canonical_profile,
     cosine_similarity,
     email_candidates,
     fallback_candidates,
+    get_lab_thing,
+    location_capture_url,
 )
 
 
@@ -22,6 +29,68 @@ def test_inbox_states_are_explicit() -> None:
 
 def test_quantity_math_is_decimal() -> None:
     assert Decimal("0.1") + Decimal("0.2") == Decimal("0.3")
+
+
+def test_count_adjustment_uses_exact_decimal_delta() -> None:
+    assert adjustment_delta(Decimal("4.5"), Decimal("6.25")) == Decimal("1.75")
+    assert adjustment_delta(Decimal("4.5"), Decimal(1)) == Decimal("-3.5")
+
+
+def test_count_adjustment_rejects_negative_physical_counts() -> None:
+    with pytest.raises(ValueError, match="negative"):
+        adjustment_delta(Decimal(1), Decimal(-1))
+
+
+def test_stock_adjustment_schema_rejects_negative_count_and_blank_reason() -> None:
+    with pytest.raises(ValidationError):
+        StockAdjustment(
+            thing_id="thing",
+            location_id="drawer",
+            counted_quantity=-1,
+            revision=1,
+            note="count",
+        )
+    with pytest.raises(ValidationError):
+        StockAdjustment(
+            thing_id="thing", location_id="drawer", counted_quantity=1, revision=1, note=""
+        )
+
+
+def test_drawer_creation_rejects_hierarchy_fields() -> None:
+    with pytest.raises(ValidationError):
+        LocationCreate(name="Drawer B", parent_id="drawer-a")
+
+
+def test_active_thing_lookup_excludes_archived_records() -> None:
+    db = MagicMock()
+    db.scalar.side_effect = ["lab-1", None]
+    user = User(
+        id="user-1",
+        email="test@example.invalid",
+        password_hash="unused",
+        display_name="Test",
+        is_owner=True,
+    )
+    with pytest.raises(HTTPException, match="Thing not found"):
+        get_lab_thing(db, user, "thing-1")
+    statement = db.scalar.call_args_list[1].args[0]
+    assert "things.archived_at IS NULL" in str(statement)
+
+
+def test_drawer_capture_url_prefers_canonical_public_url() -> None:
+    assert location_capture_url(
+        "drawer code",
+        configured_url="http://pi3b.local:3000/",
+        request_url="http://127.0.0.1:8000/",
+    ) == "http://pi3b.local:3000/inbox?location=drawer+code"
+
+
+def test_drawer_capture_url_falls_back_to_visible_origin() -> None:
+    assert location_capture_url(
+        "abc",
+        configured_url=None,
+        request_url="https://openlab.example/lab/",
+    ) == "https://openlab.example/lab/inbox?location=abc"
 
 
 def test_offline_inbox_parser_preserves_quantity_without_claiming_identity() -> None:

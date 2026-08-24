@@ -71,9 +71,8 @@ class ThingOut(APIModel):
     updated_at: datetime
 
 
-class LocationCreate(BaseModel):
+class LocationCreate(StrictInput):
     name: str = Field(min_length=1, max_length=200)
-    parent_id: str | None = None
 
 
 class LocationOut(APIModel):
@@ -82,6 +81,13 @@ class LocationOut(APIModel):
     parent_id: str | None
     public_code: str
     revision: int
+    thing_count: int = 0
+    total_quantity: Decimal = Decimal()
+
+
+class LocationQRInfo(BaseModel):
+    target_url: str
+    svg_url: str
 
 
 class StockMutation(BaseModel):
@@ -99,13 +105,34 @@ class StockMovementOut(APIModel):
     to_location_id: str | None
     quantity: Decimal
     movement_type: str
+    note: str | None
     created_at: datetime
+
+
+class StockMovementDetailOut(StockMovementOut):
+    thing_name: str
+    from_location_name: str | None
+    to_location_name: str | None
 
 
 class BalanceOut(APIModel):
     thing_id: str
     location_id: str
     quantity: Decimal
+    revision: int
+    thing_name: str
+    thing_category: str
+    thing_manufacturer: str | None
+    thing_mpn: str | None
+    location_name: str
+
+
+class StockAdjustment(StrictInput):
+    thing_id: str
+    location_id: str
+    counted_quantity: Decimal = Field(ge=0)
+    revision: int = Field(ge=0)
+    note: str = Field(min_length=1, max_length=2000)
 
 
 class InboxCapture(BaseModel):

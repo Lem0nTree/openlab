@@ -1037,6 +1037,132 @@
         }
       }
     },
+    "/api/v1/locations/{location_id}": {
+      "get": {
+        "summary": "Get Location",
+        "operationId": "get_location_api_v1_locations__location_id__get",
+        "parameters": [
+          {
+            "name": "location_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Location Id"
+            }
+          },
+          {
+            "name": "openlab_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Openlab Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LocationOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/locations/{location_id}/qr-info": {
+      "get": {
+        "summary": "Location Qr Info",
+        "operationId": "location_qr_info_api_v1_locations__location_id__qr_info_get",
+        "parameters": [
+          {
+            "name": "location_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Location Id"
+            }
+          },
+          {
+            "name": "base_url",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Base Url"
+            }
+          },
+          {
+            "name": "openlab_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Openlab Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LocationQRInfo"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/locations/{location_id}/qr.svg": {
       "get": {
         "summary": "Location Qr",
@@ -1049,6 +1175,22 @@
             "schema": {
               "type": "string",
               "title": "Location Id"
+            }
+          },
+          {
+            "name": "base_url",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Base Url"
             }
           },
           {
@@ -1091,6 +1233,38 @@
         "operationId": "balances_api_v1_inventory_balances_get",
         "parameters": [
           {
+            "name": "location_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Location Id"
+            }
+          },
+          {
+            "name": "thing_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Thing Id"
+            }
+          },
+          {
             "name": "openlab_session",
             "in": "cookie",
             "required": false,
@@ -1118,6 +1292,204 @@
                     "$ref": "#/components/schemas/BalanceOut"
                   },
                   "title": "Response Balances Api V1 Inventory Balances Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/inventory/movements": {
+      "get": {
+        "summary": "Movements",
+        "operationId": "movements_api_v1_inventory_movements_get",
+        "parameters": [
+          {
+            "name": "location_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Location Id"
+            }
+          },
+          {
+            "name": "thing_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Thing Id"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 20,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "openlab_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Openlab Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/StockMovementDetailOut"
+                  },
+                  "title": "Response Movements Api V1 Inventory Movements Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/inventory/adjust": {
+      "post": {
+        "summary": "Adjust Stock",
+        "operationId": "adjust_stock_api_v1_inventory_adjust_post",
+        "parameters": [
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
+          },
+          {
+            "name": "openlab_csrf",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Openlab Csrf"
+            }
+          },
+          {
+            "name": "openlab_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Openlab Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StockAdjustment"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StockMovementOut"
                 }
               }
             }
@@ -4524,13 +4896,57 @@
             "type": "string",
             "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
             "title": "Quantity"
+          },
+          "revision": {
+            "type": "integer",
+            "title": "Revision"
+          },
+          "thing_name": {
+            "type": "string",
+            "title": "Thing Name"
+          },
+          "thing_category": {
+            "type": "string",
+            "title": "Thing Category"
+          },
+          "thing_manufacturer": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Thing Manufacturer"
+          },
+          "thing_mpn": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Thing Mpn"
+          },
+          "location_name": {
+            "type": "string",
+            "title": "Location Name"
           }
         },
         "type": "object",
         "required": [
           "thing_id",
           "location_id",
-          "quantity"
+          "quantity",
+          "revision",
+          "thing_name",
+          "thing_category",
+          "thing_manufacturer",
+          "thing_mpn",
+          "location_name"
         ],
         "title": "BalanceOut"
       },
@@ -5342,19 +5758,9 @@
             "maxLength": 200,
             "minLength": 1,
             "title": "Name"
-          },
-          "parent_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Parent Id"
           }
         },
+        "additionalProperties": false,
         "type": "object",
         "required": [
           "name"
@@ -5389,6 +5795,17 @@
           "revision": {
             "type": "integer",
             "title": "Revision"
+          },
+          "thing_count": {
+            "type": "integer",
+            "title": "Thing Count",
+            "default": 0
+          },
+          "total_quantity": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Total Quantity",
+            "default": "0"
           }
         },
         "type": "object",
@@ -5400,6 +5817,24 @@
           "revision"
         ],
         "title": "LocationOut"
+      },
+      "LocationQRInfo": {
+        "properties": {
+          "target_url": {
+            "type": "string",
+            "title": "Target Url"
+          },
+          "svg_url": {
+            "type": "string",
+            "title": "Svg Url"
+          }
+        },
+        "type": "object",
+        "required": [
+          "target_url",
+          "svg_url"
+        ],
+        "title": "LocationQRInfo"
       },
       "LoginRequest": {
         "properties": {
@@ -6166,6 +6601,152 @@
         ],
         "title": "SetupRequest"
       },
+      "StockAdjustment": {
+        "properties": {
+          "thing_id": {
+            "type": "string",
+            "title": "Thing Id"
+          },
+          "location_id": {
+            "type": "string",
+            "title": "Location Id"
+          },
+          "counted_quantity": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
+              }
+            ],
+            "title": "Counted Quantity"
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Revision"
+          },
+          "note": {
+            "type": "string",
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Note"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "thing_id",
+          "location_id",
+          "counted_quantity",
+          "revision",
+          "note"
+        ],
+        "title": "StockAdjustment"
+      },
+      "StockMovementDetailOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "thing_id": {
+            "type": "string",
+            "title": "Thing Id"
+          },
+          "from_location_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "From Location Id"
+          },
+          "to_location_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "To Location Id"
+          },
+          "quantity": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Quantity"
+          },
+          "movement_type": {
+            "type": "string",
+            "title": "Movement Type"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "thing_name": {
+            "type": "string",
+            "title": "Thing Name"
+          },
+          "from_location_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "From Location Name"
+          },
+          "to_location_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "To Location Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "thing_id",
+          "from_location_id",
+          "to_location_id",
+          "quantity",
+          "movement_type",
+          "note",
+          "created_at",
+          "thing_name",
+          "from_location_name",
+          "to_location_name"
+        ],
+        "title": "StockMovementDetailOut"
+      },
       "StockMovementOut": {
         "properties": {
           "id": {
@@ -6207,6 +6788,17 @@
             "type": "string",
             "title": "Movement Type"
           },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
           "created_at": {
             "type": "string",
             "format": "date-time",
@@ -6221,6 +6813,7 @@
           "to_location_id",
           "quantity",
           "movement_type",
+          "note",
           "created_at"
         ],
         "title": "StockMovementOut"
