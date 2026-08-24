@@ -381,10 +381,7 @@ def _manual_roles(db: Session, project: Project) -> list[BuildRole]:
     return roles
 
 
-def _manual_breakdown(db: Session, project: Project, goal: str) -> BuildBreakdown:
-    roles = _manual_roles(db, project)
-    if roles:
-        return BuildBreakdown(summary=goal[:600], roles=roles)
+def _known_breakdown(goal: str) -> BuildBreakdown | None:
     normalized = _normalize(goal)
     tokens = set(normalized.split())
     if tokens & {"plant", "soil"} and tokens & {"water", "watering", "moisture"}:
@@ -412,6 +409,16 @@ def _manual_breakdown(db: Session, project: Project, goal: str) -> BuildBreakdow
                 ),
             ],
         )
+    return None
+
+
+def _manual_breakdown(db: Session, project: Project, goal: str) -> BuildBreakdown:
+    roles = _manual_roles(db, project)
+    if roles:
+        return BuildBreakdown(summary=goal[:600], roles=roles)
+    known = _known_breakdown(goal)
+    if known:
+        return known
     return BuildBreakdown(
         summary=goal[:600],
         roles=[BuildRole(role_key="primary", name=goal[:300])],
@@ -419,6 +426,12 @@ def _manual_breakdown(db: Session, project: Project, goal: str) -> BuildBreakdow
 
 
 def _decompose_build(db: Session, project: Project, goal: str) -> BuildBreakdown:
+    # Keep well-known, simple intents minimal and deterministic. A provider can
+    # otherwise turn a three-part bench build into an arbitrary shopping list.
+    if not _manual_roles(db, project):
+        known = _known_breakdown(goal)
+        if known:
+            return known
     config = _provider_config(db, project.lab_id)
     if not config or not config.enabled:
         return _manual_breakdown(db, project, goal)

@@ -9,6 +9,7 @@ from pypdf import PdfWriter
 from openlab.demo_seed import COMMON_MODULES
 from openlab.intelligence import (
     BuildBreakdown,
+    _decompose_build,
     _inventory_retrieval_values,
     _manual_breakdown,
     _token_score,
@@ -166,6 +167,25 @@ def test_plant_monitor_fallback_uses_functional_inventory_roles(monkeypatch) -> 
         "indicator",
     ]
     assert breakdown.roles[0].required_capabilities == ["soil moisture sensing"]
+
+
+def test_known_plant_monitor_bypasses_provider_expansion(monkeypatch) -> None:
+    monkeypatch.setattr("openlab.intelligence._manual_roles", lambda _db, _project: [])
+    monkeypatch.setattr(
+        "openlab.intelligence._provider_config",
+        lambda _db, _lab_id: pytest.fail("known build should not call the provider"),
+    )
+    project = type("ProjectStub", (), {"lab_id": "lab"})()
+    breakdown = _decompose_build(  # type: ignore[arg-type]
+        None,
+        project,
+        "I want to make a plant monitor to know when it needs water",
+    )
+    assert [role.role_key for role in breakdown.roles] == [
+        "moisture_sensor",
+        "controller",
+        "indicator",
+    ]
 
 
 def test_inventory_text_retrieval_includes_capabilities_and_interfaces() -> None:
