@@ -8,9 +8,9 @@ import { LabIcon, type LabIconName } from "./lab-icon";
 const navItems: { href: string; label: string; icon: LabIconName }[] = [
   { href: "/", label: "Today", icon: "grid" },
   { href: "/inbox", label: "Capture", icon: "inbox" },
+  { href: "/projects", label: "Builds", icon: "folder" },
   { href: "/inventory", label: "Things", icon: "box" },
   { href: "/locations", label: "Locations", icon: "pin" },
-  { href: "/projects", label: "Builds", icon: "folder" },
 ];
 
 type ShellSignal = { label: string; tone: "ready" | "offline" | "checking" | "setup" };
