@@ -6,16 +6,17 @@ from hashlib import sha256
 from http import HTTPStatus
 from io import BytesIO
 from secrets import token_urlsafe
+from urllib.parse import urlencode
 
 import qrcode  # type: ignore[import-untyped]
 from argon2.exceptions import VerifyMismatchError
-from fastapi import Depends, FastAPI, Header, HTTPException, Request, Response, UploadFile
+from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request, Response, UploadFile
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from fastapi.responses import Response as FastAPIResponse
 from qrcode.image.svg import SvgPathImage  # type: ignore[import-untyped]
-from sqlalchemy import func, select
-from sqlalchemy.orm import Session
+from sqlalchemy import func, or_, select
+from sqlalchemy.orm import Session, aliased
 
 from .config import get_settings
 from .db import get_db
@@ -76,6 +77,7 @@ from .schemas import (
     LabOut,
     LocationCreate,
     LocationOut,
+    LocationQRInfo,
     LoginRequest,
     PinOut,
     PinoutReplace,
@@ -90,6 +92,8 @@ from .schemas import (
     SchematicAccept,
     SchematicRequest,
     SetupRequest,
+    StockAdjustment,
+    StockMovementDetailOut,
     StockMovementOut,
     StockMutation,
     ThingCreate,
@@ -102,6 +106,7 @@ from .schematics import accept_schematic, export_kicad_schematic
 from .security import create_session, current_user, hasher, require_csrf
 from .services import (
     active_provider,
+    adjust_inventory,
     apply_movement,
     audit,
     available_quantity,
@@ -111,6 +116,7 @@ from .services import (
     get_lab_location,
     get_lab_thing,
     lab_for_user,
+    location_capture_url,
     refresh_inbox_status,
     save_upload,
 )
@@ -422,23 +428,66 @@ def archive_thing(
     thing_id: str, user: User = Depends(current_user), db: Session = Depends(get_db)
 ) -> None:
     item = get_lab_thing(db, user, thing_id)
+    stock_total = db.scalar(
+        select(func.coalesce(func.sum(StockBalance.quantity), 0)).where(
+            StockBalance.thing_id == item.id,
+            StockBalance.quantity > 0,
+        )
+    )
+    active_allocations = db.scalar(
+        select(func.count(Allocation.id)).where(
+            Allocation.thing_id == item.id,
+            Allocation.state.in_(["reserved", "in_use", "recoverable"]),
+        )
+    )
+    if stock_total or active_allocations:
+        raise HTTPException(
+            status_code=409,
+            detail="Move or consume all stock and clear active allocations before archiving",
+        )
     item.archived_at = datetime.now(UTC)
     item.revision += 1
     audit(db, user, "thing.archived", "thing", item.id)
     db.commit()
 
 
+def location_out(db: Session, location: Location) -> dict[str, object]:
+    thing_count, total_quantity = db.execute(
+        select(
+            func.count(func.distinct(StockBalance.thing_id)),
+            func.coalesce(func.sum(StockBalance.quantity), 0),
+        )
+        .select_from(StockBalance)
+        .join(Thing, Thing.id == StockBalance.thing_id)
+        .where(
+            StockBalance.location_id == location.id,
+            StockBalance.quantity > 0,
+            Thing.archived_at.is_(None),
+        )
+    ).one()
+    return {
+        "id": location.id,
+        "name": location.name,
+        "parent_id": location.parent_id,
+        "public_code": location.public_code,
+        "revision": location.revision,
+        "thing_count": thing_count,
+        "total_quantity": total_quantity,
+    }
+
+
 @app.get("/api/v1/locations", response_model=list[LocationOut])
 def list_locations(
     user: User = Depends(current_user), db: Session = Depends(get_db)
-) -> list[Location]:
-    return list(
+) -> list[dict[str, object]]:
+    locations = list(
         db.scalars(
             select(Location)
             .where(Location.lab_id == lab_for_user(db, user), Location.archived_at.is_(None))
             .order_by(Location.name)
         ).all()
     )
+    return [location_out(db, location) for location in locations]
 
 
 @app.post(
@@ -450,9 +499,7 @@ def list_locations(
 def add_location(
     payload: LocationCreate, user: User = Depends(current_user), db: Session = Depends(get_db)
 ) -> Location:
-    if payload.parent_id:
-        get_lab_location(db, user, payload.parent_id)
-    item = Location(lab_id=lab_for_user(db, user), name=payload.name, parent_id=payload.parent_id)
+    item = Location(lab_id=lab_for_user(db, user), name=payload.name, parent_id=None)
     db.add(item)
     db.flush()
     audit(db, user, "location.created", "location", item.id)
@@ -463,7 +510,7 @@ def add_location(
 @app.get("/api/v1/locations/code/{public_code}", response_model=LocationOut)
 def lookup_location(
     public_code: str, user: User = Depends(current_user), db: Session = Depends(get_db)
-) -> Location:
+) -> dict[str, object]:
     item = db.scalar(
         select(Location).where(
             Location.public_code == public_code, Location.lab_id == lab_for_user(db, user)
@@ -471,32 +518,157 @@ def lookup_location(
     )
     if not item:
         raise HTTPException(status_code=404, detail="Location not found")
-    return item
+    return location_out(db, item)
+
+
+@app.get("/api/v1/locations/{location_id}", response_model=LocationOut)
+def get_location(
+    location_id: str, user: User = Depends(current_user), db: Session = Depends(get_db)
+) -> dict[str, object]:
+    return location_out(db, get_lab_location(db, user, location_id))
+
+
+def qr_target(location: Location, request: Request, base_url: str | None) -> str:
+    try:
+        return location_capture_url(
+            location.public_code,
+            configured_url=settings.public_url,
+            request_url=base_url or str(request.base_url),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@app.get("/api/v1/locations/{location_id}/qr-info", response_model=LocationQRInfo)
+def location_qr_info(
+    location_id: str,
+    request: Request,
+    base_url: str | None = None,
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+) -> dict[str, str]:
+    location = get_lab_location(db, user, location_id)
+    target_url = qr_target(location, request, base_url)
+    query = f"?{urlencode({'base_url': base_url})}" if base_url and not settings.public_url else ""
+    return {
+        "target_url": target_url,
+        "svg_url": f"/api/v1/locations/{location.id}/qr.svg{query}",
+    }
 
 
 @app.get("/api/v1/locations/{location_id}/qr.svg", response_class=FastAPIResponse)
 def location_qr(
-    location_id: str, user: User = Depends(current_user), db: Session = Depends(get_db)
+    location_id: str,
+    request: Request,
+    base_url: str | None = None,
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
 ) -> FastAPIResponse:
     location = get_lab_location(db, user, location_id)
     output = BytesIO()
-    qrcode.make(
-        f"openlab://location/{location.public_code}", image_factory=SvgPathImage, border=2
-    ).save(output)
-    return FastAPIResponse(content=output.getvalue(), media_type="image/svg+xml")
+    qrcode.make(qr_target(location, request, base_url), image_factory=SvgPathImage, border=2).save(
+        output
+    )
+    return FastAPIResponse(
+        content=output.getvalue(),
+        media_type="image/svg+xml",
+        headers={"Content-Disposition": f'inline; filename="openlab-{location.public_code}.svg"'},
+    )
 
 
 @app.get("/api/v1/inventory/balances", response_model=list[BalanceOut])
 def balances(
+    location_id: str | None = None,
+    thing_id: str | None = None,
     user: User = Depends(current_user), db: Session = Depends(get_db)
-) -> list[StockBalance]:
-    return list(
-        db.scalars(
-            select(StockBalance)
-            .join(Thing)
-            .where(Thing.lab_id == lab_for_user(db, user), StockBalance.quantity > 0)
-        ).all()
+) -> list[dict[str, object]]:
+    lab_id = lab_for_user(db, user)
+    if location_id:
+        get_lab_location(db, user, location_id)
+    if thing_id:
+        get_lab_thing(db, user, thing_id)
+    query = (
+        select(StockBalance, Thing, Location)
+        .join(Thing, Thing.id == StockBalance.thing_id)
+        .join(Location, Location.id == StockBalance.location_id)
+        .where(
+            Thing.lab_id == lab_id,
+            Thing.archived_at.is_(None),
+            Location.lab_id == lab_id,
+            Location.archived_at.is_(None),
+            StockBalance.quantity > 0,
+        )
+        .order_by(Thing.name, Location.name)
     )
+    if location_id:
+        query = query.where(StockBalance.location_id == location_id)
+    if thing_id:
+        query = query.where(StockBalance.thing_id == thing_id)
+    return [
+        {
+            "thing_id": balance.thing_id,
+            "location_id": balance.location_id,
+            "quantity": balance.quantity,
+            "revision": balance.revision,
+            "thing_name": thing.name,
+            "thing_category": thing.category,
+            "thing_manufacturer": thing.manufacturer,
+            "thing_mpn": thing.mpn,
+            "location_name": location.name,
+        }
+        for balance, thing, location in db.execute(query).all()
+    ]
+
+
+@app.get("/api/v1/inventory/movements", response_model=list[StockMovementDetailOut])
+def movements(
+    location_id: str | None = None,
+    thing_id: str | None = None,
+    limit: int = Query(default=20, ge=1, le=100),
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+) -> list[dict[str, object]]:
+    lab_id = lab_for_user(db, user)
+    if location_id:
+        get_lab_location(db, user, location_id)
+    if thing_id:
+        get_lab_thing(db, user, thing_id)
+    from_location = aliased(Location)
+    to_location = aliased(Location)
+    query = (
+        select(StockMovement, Thing, from_location, to_location)
+        .join(Thing, Thing.id == StockMovement.thing_id)
+        .outerjoin(from_location, from_location.id == StockMovement.from_location_id)
+        .outerjoin(to_location, to_location.id == StockMovement.to_location_id)
+        .where(StockMovement.lab_id == lab_id, Thing.lab_id == lab_id)
+        .order_by(StockMovement.created_at.desc())
+        .limit(limit)
+    )
+    if location_id:
+        query = query.where(
+            or_(
+                StockMovement.from_location_id == location_id,
+                StockMovement.to_location_id == location_id,
+            )
+        )
+    if thing_id:
+        query = query.where(StockMovement.thing_id == thing_id)
+    return [
+        {
+            "id": movement.id,
+            "thing_id": movement.thing_id,
+            "thing_name": thing.name,
+            "from_location_id": movement.from_location_id,
+            "from_location_name": source.name if source else None,
+            "to_location_id": movement.to_location_id,
+            "to_location_name": destination.name if destination else None,
+            "quantity": movement.quantity,
+            "movement_type": movement.movement_type,
+            "note": movement.note,
+            "created_at": movement.created_at,
+        }
+        for movement, thing, source, destination in db.execute(query).all()
+    ]
 
 
 def stock_endpoint(kind: str) -> Callable[..., StockMovement]:
@@ -512,6 +684,8 @@ def stock_endpoint(kind: str) -> Callable[..., StockMovement]:
             raise HTTPException(
                 status_code=422, detail="Moving stock needs a source and destination"
             )
+        if kind == "move" and payload.from_location_id == payload.to_location_id:
+            raise HTTPException(status_code=422, detail="Source and destination must be different")
         if kind == "consume" and not payload.from_location_id:
             raise HTTPException(status_code=422, detail="Consuming stock needs a source")
         item = apply_movement(
@@ -529,6 +703,32 @@ def stock_endpoint(kind: str) -> Callable[..., StockMovement]:
         return item
 
     return endpoint
+
+
+@app.post(
+    "/api/v1/inventory/adjust",
+    response_model=StockMovementOut,
+    status_code=201,
+    dependencies=[Depends(require_csrf)],
+)
+def adjust_stock(
+    payload: StockAdjustment,
+    idempotency_key: str = Depends(require_idempotency),
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+) -> StockMovement:
+    movement = adjust_inventory(
+        db,
+        user,
+        thing_id=payload.thing_id,
+        location_id=payload.location_id,
+        counted_quantity=payload.counted_quantity,
+        revision=payload.revision,
+        note=payload.note,
+        idempotency_key=idempotency_key,
+    )
+    db.commit()
+    return movement
 
 
 app.post(

@@ -5,9 +5,16 @@ export type Thing = {
   manufacturer: string | null;
   mpn: string | null;
   metadata_json: Record<string, unknown>;
+  tracking_mode: string;
+  revision: number;
+  created_at: string;
+  updated_at: string;
 };
 
-export type Location = { id: string; name: string; parent_id: string | null; public_code: string };
+export type Location = { id: string; name: string; parent_id: string | null; public_code: string; revision: number; thing_count: number; total_quantity: string };
+export type Balance = { thing_id: string; location_id: string; quantity: string; revision: number; thing_name: string; thing_category: string; thing_manufacturer: string | null; thing_mpn: string | null; location_name: string };
+export type StockMovement = { id: string; thing_id: string; thing_name: string; from_location_id: string | null; from_location_name: string | null; to_location_id: string | null; to_location_name: string | null; quantity: string; movement_type: string; note: string | null; created_at: string };
+export type LocationQRInfo = { target_url: string; svg_url: string };
 export type InboxItem = { id: string; input_type: string; status: string; text: string | null; error: string | null; processing_evidence: Record<string, unknown>; created_at: string };
 export type InboxCandidate = { id: string; name: string; quantity: string; category: string; identity_confidence: string; status: string; thing_id: string | null; product_url: string | null; provenance: Record<string, unknown> };
 export type ProviderConfig = { id: string; provider: string; base_url: string; model: string; embedding_model: string | null; enabled: boolean; embeddings_enabled: boolean; has_api_key: boolean; egress: "local" | "external" };

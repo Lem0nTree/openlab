@@ -1,7 +1,9 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
-import { api, idempotencyHeaders, upload, type InboxCandidate, type InboxItem, type Location } from "@/lib/api";
+import Link from "next/link";
+import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { api, idempotencyHeaders, upload, type InboxCandidate, type InboxItem, type Location, type Thing } from "@/lib/api";
+import { captureMode, existingThingConfirmation, locationFromCode } from "@/lib/inventory-utils";
 import { Shell } from "./shell";
 
 const modes = [["text", "Text"], ["photo", "Photo"], ["screenshot", "Screenshot"], ["voice", "Voice"], ["email", "Email"], ["pdf", "PDF"]] as const;
@@ -22,11 +24,13 @@ type CandidateCardProps = {
   item: InboxItem;
   candidate: InboxCandidate;
   locations: Location[];
+  things: Thing[];
+  defaultLocationId: string;
   busy: boolean;
   request: (path: string, init: RequestInit) => Promise<void>;
 };
 
-function CandidateCard({ item, candidate, locations, busy, request }: CandidateCardProps) {
+function CandidateCard({ item, candidate, locations, things, defaultLocationId, busy, request }: CandidateCardProps) {
   const description = typeof candidate.provenance.description === "string" ? candidate.provenance.description : "";
   const linkRequired = confidence(candidate) === "unresolved" && !candidate.product_url;
 
@@ -34,10 +38,11 @@ function CandidateCard({ item, candidate, locations, busy, request }: CandidateC
     event.preventDefault();
     const data = new FormData(event.currentTarget);
     const submitter = (event.nativeEvent as SubmitEvent).submitter as HTMLButtonElement | null;
+    const existingThingId = String(data.get("existing_thing_id") ?? "");
     const payload = { name: data.get("name"), description: data.get("description") || null, quantity: Number(data.get("quantity")), category: data.get("category") };
     const path = `/inbox/${item.id}/candidates/${candidate.id}`;
     if (submitter?.dataset.action === "confirm") {
-      return request(`${path}/confirm`, { method: "POST", body: JSON.stringify(payload) });
+      return request(`${path}/confirm`, { method: "POST", body: JSON.stringify({ ...payload, ...existingThingConfirmation(existingThingId) }) });
     }
     return request(path, { method: "PATCH", body: JSON.stringify(payload) });
   }
@@ -68,6 +73,7 @@ function CandidateCard({ item, candidate, locations, busy, request }: CandidateC
           <label className="candidate-description"><span>What it does</span><textarea name="description" defaultValue={description} placeholder="Short functional sentence for semantic retrieval" /></label>
           <label><span>Quantity</span><input name="quantity" type="number" min="0.000001" step="any" defaultValue={candidate.quantity} required /></label>
           <label><span>Category</span><select name="category" defaultValue={candidate.category}>{categories.map((value) => <option key={value} value={value}>{value}</option>)}</select></label>
+          <label className="candidate-existing"><span>Inventory identity</span><select name="existing_thing_id" defaultValue=""><option value="">Create a new Thing</option>{things.map((thing) => <option key={thing.id} value={thing.id}>Add stock to {thing.name}</option>)}</select></label>
           <div className="candidate-meta"><span>Model confidence: {confidence(candidate)}</span>{candidate.product_url && <span>Product data fetched · confirm before inventory</span>}</div>
           <div className="candidate-actions">
             <button type="submit" className="secondary-button" data-action="save" disabled={busy}>Save changes</button>
@@ -82,20 +88,24 @@ function CandidateCard({ item, candidate, locations, busy, request }: CandidateC
       {candidate.status === "confirmed" && (
         <form className="receive-form" onSubmit={(event) => void receive(event)}>
           <input aria-label="Quantity to receive" name="quantity" type="number" min="0.000001" step="any" defaultValue={candidate.quantity} required />
-          <select aria-label="Inventory location" name="location_id" required defaultValue=""><option value="" disabled>Choose physical location</option>{locations.map((location) => <option key={location.id} value={location.id}>{location.name}</option>)}</select>
+          <select key={defaultLocationId || "manual"} aria-label="Inventory location" name="location_id" required defaultValue={defaultLocationId}><option value="" disabled>Choose physical location</option>{locations.map((location) => <option key={location.id} value={location.id}>{location.name}</option>)}</select>
           <button disabled={busy || locations.length === 0}>Receive into inventory</button>
         </form>
       )}
-      {candidate.status === "received" && <a className="text-link capture-inventory-link" href="/inventory">View component in inventory →</a>}
+      {candidate.status === "received" && <Link className="text-link capture-inventory-link" href="/inventory">View component in inventory →</Link>}
     </article>
   );
 }
 
-export function Inbox() {
+export function Inbox({ initialMode = "text", locationCode }: { initialMode?: string; locationCode?: string }) {
   const [items, setItems] = useState<InboxItem[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
+  const [things, setThings] = useState<Thing[]>([]);
   const [candidates, setCandidates] = useState<Record<string, InboxCandidate[]>>({});
-  const [inputType, setInputType] = useState("text");
+  const [inputType, setInputType] = useState(captureMode(initialMode));
+  const [selectedLocationId, setSelectedLocationId] = useState("");
+  const [locationWarning, setLocationWarning] = useState("");
+  const [labelDismissed, setLabelDismissed] = useState(false);
   const [text, setText] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [error, setError] = useState("");
@@ -104,24 +114,27 @@ export function Inbox() {
   const visibleCandidates = useMemo(() => items.flatMap((item) => (candidates[item.id] ?? []).filter((candidate) => candidate.status !== "ignored").map((candidate) => ({ item, candidate }))), [items, candidates]);
   const pendingItems = items.filter((item) => ["captured", "queued", "processing", "failed"].includes(item.status));
 
-  const load = async () => {
+  const load = useCallback(async () => {
     try {
-      const [nextItems, nextLocations] = await Promise.all([api<InboxItem[]>("/inbox"), api<Location[]>("/locations")]);
-      setItems(nextItems); setLocations(nextLocations);
+      const [nextItems, nextLocations, nextThings] = await Promise.all([api<InboxItem[]>("/inbox"), api<Location[]>("/locations"), api<Thing[]>("/things")]);
+      const labelLocation = locationFromCode(nextLocations, locationCode);
+      setItems(nextItems); setLocations(nextLocations); setThings(nextThings);
+      if (locationCode && !labelLocation) { setSelectedLocationId(""); setLocationWarning("This drawer label is invalid or no longer available. Choose a destination manually."); }
+      else if (labelLocation && !labelDismissed) { setSelectedLocationId(labelLocation.id); setLocationWarning(""); }
       const entries = await Promise.all(nextItems.filter((item) => !["captured", "queued", "processing", "failed"].includes(item.status)).map(async (item) => [item.id, await api<InboxCandidate[]>(`/inbox/${item.id}/candidates`)] as const));
       setCandidates(Object.fromEntries(entries));
     } catch (event) { setError((event as Error).message); }
-  };
+  }, [labelDismissed, locationCode]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => void load(), 0);
     return () => window.clearTimeout(timer);
-  }, []);
+  }, [load]);
   useEffect(() => {
     if (!items.some((item) => ["captured", "queued", "processing"].includes(item.status))) return;
     const timer = window.setInterval(() => void load(), 2000);
     return () => window.clearInterval(timer);
-  }, [items]);
+  }, [items, load]);
 
   async function request(path: string, init: RequestInit) {
     setBusy(true); setError("");
@@ -138,9 +151,12 @@ export function Inbox() {
   }
 
   const accept = inputType === "photo" || inputType === "screenshot" ? "image/*" : inputType === "voice" ? "audio/*" : inputType === "email" ? ".eml,message/rfc822,text/plain,text/html" : "application/pdf";
+  const selectedLocation = locations.find((location) => location.id === selectedLocationId) ?? null;
   return (
     <Shell title="Capture">
       <div className="inbox-intro"><div><p className="eyebrow">UNIVERSAL INBOX</p><p>Capture notes, media, emails, and PDFs. Confirm identity before receiving stock.</p></div><a href="/settings#smart-inbox" className="text-link">Intelligence settings →</a></div>
+      {selectedLocation && <div className="capture-destination"><span><strong>Receiving into {selectedLocation.name}</strong><small>Drawer selected from QR label. You can still change it during review.</small></span><button type="button" className="secondary-button" onClick={() => { setLabelDismissed(true); setSelectedLocationId(""); }}>Clear destination</button></div>}
+      {locationWarning && <p className="notice-warning">{locationWarning}</p>}
       <section className="capture-panel">
         <div className="section-heading"><div><p className="eyebrow">NEW INPUT</p><h2>Show the lab what arrived.</h2></div><span className="muted-note">AI is optional · raw media is temporary</span></div>
         <div className="capture-tabs">{modes.map(([value, label]) => <button type="button" key={value} className={inputType === value ? "active" : ""} onClick={() => setInputType(value)}>{label}</button>)}</div>
@@ -154,7 +170,7 @@ export function Inbox() {
       <section className="inbox-list">
         <div className="section-heading"><div><p className="eyebrow">COMPONENT REVIEW</p><h2>Recent components</h2></div><span className="muted-note">{visibleCandidates.length} {visibleCandidates.length === 1 ? "component" : "components"}</span></div>
         <div className="capture-card-grid">
-          {visibleCandidates.map(({ item, candidate }) => <CandidateCard key={`${candidate.id}:${candidate.name}:${candidate.product_url ?? ""}`} item={item} candidate={candidate} locations={locations} busy={busy} request={request} />)}
+          {visibleCandidates.map(({ item, candidate }) => <CandidateCard key={`${candidate.id}:${candidate.name}:${candidate.product_url ?? ""}`} item={item} candidate={candidate} locations={locations} things={things} defaultLocationId={selectedLocationId} busy={busy} request={request} />)}
           {pendingItems.map((item) => (
             <article className="capture-card capture-processing" key={item.id}>
               <header className="capture-card-head"><div><span className="capture-kind">{item.input_type}</span><h3>{item.status === "failed" ? "Component not identified" : "Identifying component…"}</h3></div><span className={`candidate-state is-${item.status}`}>{item.status}</span></header>

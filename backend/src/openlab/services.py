@@ -13,7 +13,7 @@ from email import policy
 from email.parser import BytesParser
 from io import BytesIO
 from pathlib import Path
-from urllib.parse import urljoin, urlsplit, urlunsplit
+from urllib.parse import urlencode, urljoin, urlsplit, urlunsplit
 
 import httpx
 from fastapi import HTTPException, UploadFile, status
@@ -76,7 +76,11 @@ def lab_for_user(db: Session, user: User) -> str:
 
 def get_lab_thing(db: Session, user: User, thing_id: str) -> Thing:
     item = db.scalar(
-        select(Thing).where(Thing.id == thing_id, Thing.lab_id == lab_for_user(db, user))
+        select(Thing).where(
+            Thing.id == thing_id,
+            Thing.lab_id == lab_for_user(db, user),
+            Thing.archived_at.is_(None),
+        )
     )
     if not item:
         raise HTTPException(status_code=404, detail="Thing not found")
@@ -144,6 +148,69 @@ def _change_balance(db: Session, thing_id: str, location_id: str, delta: Decimal
         raise HTTPException(status_code=409, detail="Insufficient stock at source location")
     balance.quantity = updated
     balance.revision += 1
+
+
+def adjustment_delta(current: Decimal, counted: Decimal) -> Decimal:
+    if counted < 0:
+        raise ValueError("Counted quantity cannot be negative")
+    return counted - current
+
+
+def location_capture_url(
+    public_code: str, *, configured_url: str | None, request_url: str
+) -> str:
+    base_url = (configured_url or request_url).strip().rstrip("/")
+    parsed = urlsplit(base_url)
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        raise ValueError("The label base URL must be an absolute HTTP or HTTPS URL")
+    base_url = urlunsplit((parsed.scheme, parsed.netloc, parsed.path.rstrip("/"), "", ""))
+    return f"{base_url}/inbox?{urlencode({'location': public_code})}"
+
+
+def adjust_inventory(
+    db: Session,
+    user: User,
+    *,
+    thing_id: str,
+    location_id: str,
+    counted_quantity: Decimal,
+    revision: int,
+    note: str,
+    idempotency_key: str,
+) -> StockMovement:
+    lab_id = lab_for_user(db, user)
+    existing = db.scalar(
+        select(StockMovement).where(
+            StockMovement.lab_id == lab_id,
+            StockMovement.idempotency_key == idempotency_key,
+        )
+    )
+    if existing:
+        return existing
+    get_lab_thing(db, user, thing_id)
+    get_lab_location(db, user, location_id)
+    balance = _balance(db, thing_id, location_id, lock=True)
+    current_quantity = Decimal(balance.quantity) if balance else Decimal()
+    current_revision = balance.revision if balance else 0
+    if revision != current_revision:
+        raise HTTPException(status_code=409, detail="Stock changed elsewhere; reload and retry")
+    delta = adjustment_delta(current_quantity, counted_quantity)
+    if delta == 0:
+        raise HTTPException(status_code=409, detail="The counted quantity already matches stock")
+    clean_note = note.strip()
+    if not clean_note:
+        raise HTTPException(status_code=422, detail="A reason is required for count corrections")
+    return apply_movement(
+        db,
+        user,
+        thing_id=thing_id,
+        quantity=abs(delta),
+        movement_type="adjust",
+        idempotency_key=idempotency_key,
+        from_location_id=location_id if delta < 0 else None,
+        to_location_id=location_id if delta > 0 else None,
+        note=clean_note,
+    )
 
 
 def apply_movement(

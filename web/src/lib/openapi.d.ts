@@ -182,6 +182,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/locations/{location_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Location */
+        get: operations["get_location_api_v1_locations__location_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/locations/{location_id}/qr-info": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Location Qr Info */
+        get: operations["location_qr_info_api_v1_locations__location_id__qr_info_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/locations/{location_id}/qr.svg": {
         parameters: {
             query?: never;
@@ -210,6 +244,40 @@ export interface paths {
         get: operations["balances_api_v1_inventory_balances_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/inventory/movements": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Movements */
+        get: operations["movements_api_v1_inventory_movements_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/inventory/adjust": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Adjust Stock */
+        post: operations["adjust_stock_api_v1_inventory_adjust_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -831,6 +899,18 @@ export interface components {
             location_id: string;
             /** Quantity */
             quantity: string;
+            /** Revision */
+            revision: number;
+            /** Thing Name */
+            thing_name: string;
+            /** Thing Category */
+            thing_category: string;
+            /** Thing Manufacturer */
+            thing_manufacturer: string | null;
+            /** Thing Mpn */
+            thing_mpn: string | null;
+            /** Location Name */
+            location_name: string;
         };
         /** Body_upload_inbox_attachment_api_v1_inbox__inbox_id__attachments_post */
         Body_upload_inbox_attachment_api_v1_inbox__inbox_id__attachments_post: {
@@ -1074,8 +1154,6 @@ export interface components {
         LocationCreate: {
             /** Name */
             name: string;
-            /** Parent Id */
-            parent_id?: string | null;
         };
         /** LocationOut */
         LocationOut: {
@@ -1089,6 +1167,23 @@ export interface components {
             public_code: string;
             /** Revision */
             revision: number;
+            /**
+             * Thing Count
+             * @default 0
+             */
+            thing_count: number;
+            /**
+             * Total Quantity
+             * @default 0
+             */
+            total_quantity: string;
+        };
+        /** LocationQRInfo */
+        LocationQRInfo: {
+            /** Target Url */
+            target_url: string;
+            /** Svg Url */
+            svg_url: string;
         };
         /** LoginRequest */
         LoginRequest: {
@@ -1351,6 +1446,47 @@ export interface components {
             /** Display Name */
             display_name: string;
         };
+        /** StockAdjustment */
+        StockAdjustment: {
+            /** Thing Id */
+            thing_id: string;
+            /** Location Id */
+            location_id: string;
+            /** Counted Quantity */
+            counted_quantity: number | string;
+            /** Revision */
+            revision: number;
+            /** Note */
+            note: string;
+        };
+        /** StockMovementDetailOut */
+        StockMovementDetailOut: {
+            /** Id */
+            id: string;
+            /** Thing Id */
+            thing_id: string;
+            /** From Location Id */
+            from_location_id: string | null;
+            /** To Location Id */
+            to_location_id: string | null;
+            /** Quantity */
+            quantity: string;
+            /** Movement Type */
+            movement_type: string;
+            /** Note */
+            note: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Thing Name */
+            thing_name: string;
+            /** From Location Name */
+            from_location_name: string | null;
+            /** To Location Name */
+            to_location_name: string | null;
+        };
         /** StockMovementOut */
         StockMovementOut: {
             /** Id */
@@ -1365,6 +1501,8 @@ export interface components {
             quantity: string;
             /** Movement Type */
             movement_type: string;
+            /** Note */
+            note: string | null;
             /**
              * Created At
              * Format: date-time
@@ -2082,9 +2220,79 @@ export interface operations {
             };
         };
     };
-    location_qr_api_v1_locations__location_id__qr_svg_get: {
+    get_location_api_v1_locations__location_id__get: {
         parameters: {
             query?: never;
+            header?: never;
+            path: {
+                location_id: string;
+            };
+            cookie?: {
+                openlab_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LocationOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    location_qr_info_api_v1_locations__location_id__qr_info_get: {
+        parameters: {
+            query?: {
+                base_url?: string | null;
+            };
+            header?: never;
+            path: {
+                location_id: string;
+            };
+            cookie?: {
+                openlab_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LocationQRInfo"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    location_qr_api_v1_locations__location_id__qr_svg_get: {
+        parameters: {
+            query?: {
+                base_url?: string | null;
+            };
             header?: never;
             path: {
                 location_id: string;
@@ -2115,7 +2323,10 @@ export interface operations {
     };
     balances_api_v1_inventory_balances_get: {
         parameters: {
-            query?: never;
+            query?: {
+                location_id?: string | null;
+                thing_id?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: {
@@ -2131,6 +2342,80 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BalanceOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    movements_api_v1_inventory_movements_get: {
+        parameters: {
+            query?: {
+                location_id?: string | null;
+                thing_id?: string | null;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                openlab_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StockMovementDetailOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    adjust_stock_api_v1_inventory_adjust_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+                "Idempotency-Key"?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                openlab_csrf?: string | null;
+                openlab_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StockAdjustment"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StockMovementOut"];
                 };
             };
             /** @description Validation Error */

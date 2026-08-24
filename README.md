@@ -50,6 +50,13 @@ processed.
 See [MVP 1 Smart Inbox](docs/MVP1_SMART_INBOX.md) and
 [remaining scope](docs/REMAINING_FEATURES.md) for implementation status.
 
+## Print drawer labels
+
+Open **Locations**, choose a drawer, and preview, download, or print its QR label. Scanning the
+label opens Capture with that drawer preselected. Set `OPENLAB_PUBLIC_URL` to a stable address such
+as `http://pi3b.local:3000` before printing permanent labels; otherwise OpenLab uses the browser
+address shown on the label screen.
+
 ## Repository layout
 
 - `backend/` — FastAPI modular monolith, PostgreSQL worker, and migrations.

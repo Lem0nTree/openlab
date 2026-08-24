@@ -25,6 +25,7 @@ services:
       OPENLAB_SECRET_KEY: ${OPENLAB_SECRET_KEY:?set OPENLAB_SECRET_KEY}
       OPENLAB_ENCRYPTION_KEY: ${OPENLAB_ENCRYPTION_KEY:-}
       OPENLAB_SETUP_TOKEN: ${OPENLAB_SETUP_TOKEN:-}
+      OPENLAB_PUBLIC_URL: ${OPENLAB_PUBLIC_URL:-}
     volumes:
       - openlab-data:/var/lib/openlab
     depends_on:
