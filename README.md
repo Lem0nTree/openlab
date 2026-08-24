@@ -31,6 +31,14 @@ The Compose stack includes PostgreSQL/pgvector, FastAPI, the PostgreSQL worker,
 and the Next.js web app. Stop it with `docker compose --env-file .env -f deploy/compose.yml down`.
 Your database and attachment volumes are retained.
 
+## Automatic deployment
+
+Merges to `main` deploy to the Raspberry Pi only after the exact merge commit
+passes CI. ARM64 images are built on `aws-t3mini` and transferred to the Pi over
+Tailscale by a private self-hosted runner. See
+[`docs/AUTOMATIC_DEPLOYMENT.md`](docs/AUTOMATIC_DEPLOYMENT.md) for the trust,
+retention, rollback, and host-setup contract.
+
 ## Configure Smart Inbox
 
 Open **Inbox → Smart Inbox model** after signing in. Set a compatible endpoint
