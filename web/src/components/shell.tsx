@@ -26,12 +26,12 @@ export function Shell({ title, children, signal }: { title: string; children: Re
     <div className="shell">
       <aside className="sidebar">
         <p className="nav-label">LABORATORY</p>
-        <nav className="side-nav">{navItems.map((item) => <Link key={item.href} href={item.href} aria-current={pathname === item.href ? "page" : undefined}><LabIcon name={item.icon}/><span>{item.label}</span>{pathname === item.href && <i />}</Link>)}</nav>
+        <nav className="side-nav">{navItems.map((item) => { const current = pathname === item.href || (item.href !== "/" && pathname.startsWith(`${item.href}/`)); return <Link key={item.href} href={item.href} aria-current={current ? "page" : undefined}><LabIcon name={item.icon}/><span>{item.label}</span>{current ? <i /> : null}</Link>; })}</nav>
         <div className="sidebar-intel"><span className="intel-orb"><LabIcon name="spark" /></span><div><strong>Lab intelligence</strong><small>Local data. Your rules.</small></div></div>
         <div className="sidebar-future"><p className="nav-label">SYSTEM</p><Link href="/settings"><LabIcon name="settings" />Settings</Link></div>
       </aside>
       <section className="content"><section className="page-title"><div><p className="eyebrow">INGEST <i/> UNDERSTAND <i/> STORE <i/> BUILD</p><h1>{title}</h1></div>{signal && <span className={`page-signal ${signal.tone}`}><i/>{signal.label}</span>}</section>{children}</section>
     </div>
-    <nav className="mobile-nav">{navItems.map((item) => <Link key={item.href} href={item.href} aria-current={pathname === item.href ? "page" : undefined}><LabIcon name={item.icon}/><span>{item.label}</span></Link>)}</nav>
+    <nav className="mobile-nav">{navItems.map((item) => { const current = pathname === item.href || (item.href !== "/" && pathname.startsWith(`${item.href}/`)); return <Link key={item.href} href={item.href} aria-current={current ? "page" : undefined}><LabIcon name={item.icon}/><span>{item.label}</span></Link>; })}</nav>
   </main>;
 }

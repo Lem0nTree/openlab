@@ -3,6 +3,7 @@ from datetime import datetime
 from decimal import Decimal
 from enum import StrEnum
 
+from pgvector.sqlalchemy import Vector
 from sqlalchemy import (
     Boolean,
     DateTime,
@@ -37,7 +38,9 @@ class InboxStatus(StrEnum):
     QUEUED = "queued"
     PROCESSING = "processing"
     NEEDS_REVIEW = "needs_review"
+    PARTIALLY_CONFIRMED = "partially_confirmed"
     CONFIRMED = "confirmed"
+    PARTIALLY_RECEIVED = "partially_received"
     COMMITTED = "committed"
     FAILED = "failed"
     CANCELLED = "cancelled"
@@ -161,7 +164,9 @@ class InboxItem(Base, Timestamped):
     text: Mapped[str | None] = mapped_column(Text)
     provider_name: Mapped[str | None] = mapped_column(String(100))
     error: Mapped[str | None] = mapped_column(Text)
-    processing_evidence: Mapped[dict[str, object]] = mapped_column(JSONB, default=dict, nullable=False)
+    processing_evidence: Mapped[dict[str, object]] = mapped_column(
+        JSONB, default=dict, nullable=False
+    )
 
 
 class InboxCandidate(Base, Timestamped):
@@ -173,7 +178,12 @@ class InboxCandidate(Base, Timestamped):
     name: Mapped[str] = mapped_column(String(300), nullable=False)
     quantity: Mapped[Decimal] = mapped_column(Numeric(18, 6), default=1, nullable=False)
     category: Mapped[str] = mapped_column(String(120), default="uncategorized", nullable=False)
-    confidence: Mapped[str] = mapped_column(String(20), default="unresolved", nullable=False)
+    identity_confidence: Mapped[str] = mapped_column(
+        "confidence", String(20), default="unresolved", nullable=False
+    )
+    status: Mapped[str] = mapped_column(String(30), default="proposed", nullable=False, index=True)
+    thing_id: Mapped[str | None] = mapped_column(ForeignKey("things.id"), index=True)
+    product_url: Mapped[str | None] = mapped_column(String(2000))
     provenance: Mapped[dict[str, object]] = mapped_column(JSONB, default=dict, nullable=False)
 
 
@@ -188,7 +198,9 @@ class Attachment(Base, Timestamped):
     content_type: Mapped[str] = mapped_column(String(200), nullable=False)
     size_bytes: Mapped[int] = mapped_column(Integer, nullable=False)
     original_name: Mapped[str | None] = mapped_column(String(500))
-    storage_key: Mapped[str] = mapped_column(String(600), nullable=False)
+    storage_key: Mapped[str | None] = mapped_column(String(600))
+    purged_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    cleanup_error: Mapped[str | None] = mapped_column(Text)
 
 
 class Job(Base, Timestamped):
@@ -202,6 +214,9 @@ class Job(Base, Timestamped):
     max_attempts: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
     leased_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     last_error: Mapped[str | None] = mapped_column(Text)
+    result: Mapped[dict[str, object] | None] = mapped_column(JSONB)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
 
 
 class Project(Base, Timestamped):
@@ -211,10 +226,14 @@ class Project(Base, Timestamped):
     name: Mapped[str] = mapped_column(String(300), nullable=False)
     description: Mapped[str | None] = mapped_column(Text)
     status: Mapped[str] = mapped_column(String(30), default="active", nullable=False)
+    design_json: Mapped[dict[str, object]] = mapped_column(JSONB, default=dict, nullable=False)
 
 
 class Requirement(Base, Timestamped):
     __tablename__ = "requirements"
+    __table_args__ = (
+        UniqueConstraint("project_id", "source", "role_key", name="uq_requirement_source_role"),
+    )
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     project_id: Mapped[str] = mapped_column(
         ForeignKey("projects.id", ondelete="CASCADE"), nullable=False
@@ -223,6 +242,10 @@ class Requirement(Base, Timestamped):
     quantity: Mapped[Decimal] = mapped_column(Numeric(18, 6), default=1, nullable=False)
     priority: Mapped[str] = mapped_column(String(20), default="required", nullable=False)
     constraints: Mapped[dict[str, object]] = mapped_column(JSONB, default=dict, nullable=False)
+    source: Mapped[str] = mapped_column(String(30), default="user", nullable=False)
+    role_key: Mapped[str | None] = mapped_column(String(120))
+    selected_thing_id: Mapped[str | None] = mapped_column(ForeignKey("things.id"), index=True)
+    match_status: Mapped[str | None] = mapped_column(String(30))
 
 
 class Allocation(Base, Timestamped):
@@ -287,10 +310,15 @@ class Pin(Base):
     )
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     role: Mapped[str] = mapped_column(String(100), nullable=False)
-    alternate_functions: Mapped[dict[str, object]] = mapped_column(
-        JSONB, default=list, nullable=False
-    )
+    number: Mapped[str | None] = mapped_column(String(40))
+    electrical_type: Mapped[str] = mapped_column(String(40), default="passive", nullable=False)
+    alternate_functions: Mapped[list[str]] = mapped_column(JSONB, default=list, nullable=False)
     restrictions: Mapped[str | None] = mapped_column(Text)
+    details: Mapped[dict[str, object]] = mapped_column(JSONB, default=dict, nullable=False)
+    source_ref: Mapped[str | None] = mapped_column(String(600))
+    verification_state: Mapped[str] = mapped_column(
+        String(30), default="unverified", nullable=False
+    )
 
 
 class Relationship(Base):
@@ -307,6 +335,11 @@ class Relationship(Base):
 
 class Embedding(Base, Timestamped):
     __tablename__ = "embeddings"
+    __table_args__ = (
+        UniqueConstraint(
+            "thing_id", "purpose", "provider", "model", name="uq_embedding_space_thing"
+        ),
+    )
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     lab_id: Mapped[str] = mapped_column(ForeignKey("labs.id"), nullable=False, index=True)
     thing_id: Mapped[str] = mapped_column(
@@ -316,7 +349,9 @@ class Embedding(Base, Timestamped):
     model: Mapped[str] = mapped_column(String(200), nullable=False)
     dimensions: Mapped[int] = mapped_column(Integer, nullable=False)
     fingerprint: Mapped[str] = mapped_column(String(128), nullable=False)
-    vector_json: Mapped[list[float]] = mapped_column(JSONB, nullable=False)
+    profile_text: Mapped[str] = mapped_column(Text, nullable=False)
+    embedding_vector: Mapped[list[float]] = mapped_column(Vector(), nullable=False)
+    purpose: Mapped[str] = mapped_column(String(40), default="profile", nullable=False)
 
 
 class ProviderConfig(Base, Timestamped):
@@ -326,6 +361,8 @@ class ProviderConfig(Base, Timestamped):
     provider: Mapped[str] = mapped_column(String(100), nullable=False)
     base_url: Mapped[str] = mapped_column(String(600), nullable=False)
     model: Mapped[str] = mapped_column(String(300), nullable=False)
+    embedding_model: Mapped[str | None] = mapped_column(String(300))
+    embeddings_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     capabilities: Mapped[dict[str, object]] = mapped_column(JSONB, default=dict, nullable=False)
     secret_ciphertext: Mapped[str | None] = mapped_column(Text)
     enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)

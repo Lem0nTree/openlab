@@ -47,6 +47,7 @@ services:
       OPENLAB_DATA_DIR: /var/lib/openlab
       OPENLAB_SECRET_KEY: ${OPENLAB_SECRET_KEY:?set OPENLAB_SECRET_KEY}
       OPENLAB_ENCRYPTION_KEY: ${OPENLAB_ENCRYPTION_KEY:-}
+      OPENLAB_KICAD_CLI: ${OPENLAB_KICAD_CLI:-}
     volumes:
       - openlab-data:/var/lib/openlab
     depends_on:

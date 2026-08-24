@@ -1,7 +1,8 @@
 # Remaining implementation scope
 
-This document records what remains after the current foundation, MVP 0 core
-inventory, selected MVP 2 project flows, and MVP 1 Smart Inbox work.
+This document records what remains after the current foundation, the review-first
+multimodal Inbox, canonical item intelligence, semantic inventory retrieval, and
+the first bounded BUILD and schematic proposal flows.
 
 ## MVP 0 — Core inventory
 
@@ -18,6 +19,8 @@ inventory, selected MVP 2 project flows, and MVP 1 Smart Inbox work.
 - UI support for matching a candidate to an existing Thing before confirmation.
 - Cancellation controls, retry controls, source-artifact preview, and richer
   field-level evidence presentation.
+- More marketplace-specific product-page extractors beyond the current safe,
+  generic title/description enrichment.
 
 ## MVP 2 — Projects and BUILD
 
@@ -25,21 +28,28 @@ inventory, selected MVP 2 project flows, and MVP 1 Smart Inbox work.
   a project history view.
 - Recovery/dismantle UI and project-aware consumption workflow.
 - Broader concurrent inventory and allocation integration tests.
+- A general “What can I build?” explorer; the implemented flow starts from a
+  specific project goal and returns bounded owned-item combinations plus a
+  `Component required` list.
 
 ## MVP 3 — Structured hardware knowledge
 
-- APIs and editors for capabilities, interfaces, pinouts, relationships, and
-  documents.
-- Datasheet attachment/enrichment review and trust/provenance inspection.
+- Full editors for capabilities, interfaces, pinouts, relationships, and
+  documents; the capability/interface and pinout APIs are available, but the
+  dedicated knowledge-management UI is still limited.
+- Datasheet attachment/enrichment review and richer trust/provenance inspection.
 - Full deterministic compatibility explanations using typed electrical facts.
+- Standard KiCad library-symbol mapping, board-level footprints, and optional
+  SPICE simulation. The current exporter produces a reviewable generic-pin
+  schematic and can run KiCad ERC when the CLI is configured.
 
 ## MVP 4 — Semantic retrieval and intelligence
 
-- Native pgvector embedding storage, active embedding spaces, and re-embedding jobs.
-- OpenRouter/Ollama-compatible embeddings configuration and semantic retrieval.
-- Typed inventory/knowledge/project orchestrator services.
-- AI-assisted build decomposition, build checks, and “What can I build?” UI
-  grounded in actual stock and compatibility evidence.
+- Embedding-space migration/version management beyond the current configured
+  profile space.
+- Richer typed compatibility rules and explanation coverage.
+- Background model/provider observability, evaluation datasets, and retrieval
+  quality benchmarks.
 
 ## Release and verification
 

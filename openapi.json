@@ -1695,6 +1695,101 @@
             }
           }
         }
+      },
+      "patch": {
+        "summary": "Update Project Status",
+        "operationId": "update_project_status_api_v1_projects__project_id__patch",
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Project Id"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          },
+          {
+            "name": "openlab_csrf",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Openlab Csrf"
+            }
+          },
+          {
+            "name": "openlab_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Openlab Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProjectUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/api/v1/inbox/{inbox_id}/attachments": {
@@ -1883,10 +1978,10 @@
         }
       }
     },
-    "/api/v1/inbox/{inbox_id}/confirm": {
-      "post": {
-        "summary": "Confirm Inbox",
-        "operationId": "confirm_inbox_api_v1_inbox__inbox_id__confirm_post",
+    "/api/v1/inbox/{inbox_id}/candidates/{candidate_id}": {
+      "patch": {
+        "summary": "Patch Inbox Candidate",
+        "operationId": "patch_inbox_candidate_api_v1_inbox__inbox_id__candidates__candidate_id__patch",
         "parameters": [
           {
             "name": "inbox_id",
@@ -1895,6 +1990,511 @@
             "schema": {
               "type": "string",
               "title": "Inbox Id"
+            }
+          },
+          {
+            "name": "candidate_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Candidate Id"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          },
+          {
+            "name": "openlab_csrf",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Openlab Csrf"
+            }
+          },
+          {
+            "name": "openlab_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Openlab Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InboxCandidatePatch"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InboxCandidateOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete Inbox Candidate",
+        "operationId": "delete_inbox_candidate_api_v1_inbox__inbox_id__candidates__candidate_id__delete",
+        "parameters": [
+          {
+            "name": "inbox_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Inbox Id"
+            }
+          },
+          {
+            "name": "candidate_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Candidate Id"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          },
+          {
+            "name": "openlab_csrf",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Openlab Csrf"
+            }
+          },
+          {
+            "name": "openlab_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Openlab Session"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/inbox/{inbox_id}/candidates/{candidate_id}/confirm": {
+      "post": {
+        "summary": "Confirm Inbox Candidate",
+        "operationId": "confirm_inbox_candidate_api_v1_inbox__inbox_id__candidates__candidate_id__confirm_post",
+        "parameters": [
+          {
+            "name": "inbox_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Inbox Id"
+            }
+          },
+          {
+            "name": "candidate_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Candidate Id"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          },
+          {
+            "name": "openlab_csrf",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Openlab Csrf"
+            }
+          },
+          {
+            "name": "openlab_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Openlab Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InboxCandidateConfirm"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InboxCandidateOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/inbox/{inbox_id}/confirm-batch": {
+      "post": {
+        "summary": "Confirm Inbox Batch",
+        "operationId": "confirm_inbox_batch_api_v1_inbox__inbox_id__confirm_batch_post",
+        "parameters": [
+          {
+            "name": "inbox_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Inbox Id"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          },
+          {
+            "name": "openlab_csrf",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Openlab Csrf"
+            }
+          },
+          {
+            "name": "openlab_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Openlab Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InboxCandidateBatchConfirm"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/InboxCandidateOut"
+                  },
+                  "title": "Response Confirm Inbox Batch Api V1 Inbox  Inbox Id  Confirm Batch Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/inbox/{inbox_id}/candidates/{candidate_id}/ignore": {
+      "post": {
+        "summary": "Ignore Inbox Candidate",
+        "operationId": "ignore_inbox_candidate_api_v1_inbox__inbox_id__candidates__candidate_id__ignore_post",
+        "parameters": [
+          {
+            "name": "inbox_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Inbox Id"
+            }
+          },
+          {
+            "name": "candidate_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Candidate Id"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          },
+          {
+            "name": "openlab_csrf",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Openlab Csrf"
+            }
+          },
+          {
+            "name": "openlab_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Openlab Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InboxCandidateOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/inbox/{inbox_id}/candidates/{candidate_id}/receive": {
+      "post": {
+        "summary": "Receive Inbox Candidate",
+        "operationId": "receive_inbox_candidate_api_v1_inbox__inbox_id__candidates__candidate_id__receive_post",
+        "parameters": [
+          {
+            "name": "inbox_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Inbox Id"
+            }
+          },
+          {
+            "name": "candidate_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Candidate Id"
             }
           },
           {
@@ -1967,7 +2567,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/InboxConfirm"
+                "$ref": "#/components/schemas/InboxCandidateReceive"
               }
             }
           }
@@ -1979,6 +2579,112 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/StockMovementOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/inbox/{inbox_id}/candidates/{candidate_id}/enrich-url": {
+      "post": {
+        "summary": "Enrich Inbox Candidate Url",
+        "operationId": "enrich_inbox_candidate_url_api_v1_inbox__inbox_id__candidates__candidate_id__enrich_url_post",
+        "parameters": [
+          {
+            "name": "inbox_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Inbox Id"
+            }
+          },
+          {
+            "name": "candidate_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Candidate Id"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          },
+          {
+            "name": "openlab_csrf",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Openlab Csrf"
+            }
+          },
+          {
+            "name": "openlab_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Openlab Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InboxEnrichURL"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InboxCandidateOut"
                 }
               }
             }
@@ -2627,6 +3333,969 @@
         }
       }
     },
+    "/api/v1/knowledge/search": {
+      "post": {
+        "summary": "Knowledge Search",
+        "operationId": "knowledge_search_api_v1_knowledge_search_post",
+        "parameters": [
+          {
+            "name": "openlab_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Openlab Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/KnowledgeSearchRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/KnowledgeSearchResult"
+                  },
+                  "title": "Response Knowledge Search Api V1 Knowledge Search Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/things/{thing_id}/knowledge": {
+      "put": {
+        "summary": "Replace Thing Knowledge",
+        "operationId": "replace_thing_knowledge_api_v1_things__thing_id__knowledge_put",
+        "parameters": [
+          {
+            "name": "thing_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Thing Id"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          },
+          {
+            "name": "openlab_csrf",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Openlab Csrf"
+            }
+          },
+          {
+            "name": "openlab_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Openlab Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ThingKnowledgeReplace"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Replace Thing Knowledge Api V1 Things  Thing Id  Knowledge Put"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/jobs/{job_id}": {
+      "get": {
+        "summary": "Get Job",
+        "operationId": "get_job_api_v1_jobs__job_id__get",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Job Id"
+            }
+          },
+          {
+            "name": "openlab_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Openlab Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{project_id}/jobs": {
+      "get": {
+        "summary": "List Project Jobs",
+        "operationId": "list_project_jobs_api_v1_projects__project_id__jobs_get",
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Project Id"
+            }
+          },
+          {
+            "name": "openlab_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Openlab Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/JobOut"
+                  },
+                  "title": "Response List Project Jobs Api V1 Projects  Project Id  Jobs Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{project_id}/plan": {
+      "post": {
+        "summary": "Queue Build Plan",
+        "operationId": "queue_build_plan_api_v1_projects__project_id__plan_post",
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Project Id"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          },
+          {
+            "name": "openlab_csrf",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Openlab Csrf"
+            }
+          },
+          {
+            "name": "openlab_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Openlab Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BuildPlanRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{project_id}/plan/accept": {
+      "post": {
+        "summary": "Accept Project Plan",
+        "operationId": "accept_project_plan_api_v1_projects__project_id__plan_accept_post",
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Project Id"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          },
+          {
+            "name": "openlab_csrf",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Openlab Csrf"
+            }
+          },
+          {
+            "name": "openlab_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Openlab Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BuildPlanAccept"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectDetailOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{project_id}/enrich": {
+      "post": {
+        "summary": "Queue Project Enrichment",
+        "operationId": "queue_project_enrichment_api_v1_projects__project_id__enrich_post",
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Project Id"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          },
+          {
+            "name": "openlab_csrf",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Openlab Csrf"
+            }
+          },
+          {
+            "name": "openlab_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Openlab Session"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/JobOut"
+                  },
+                  "title": "Response Queue Project Enrichment Api V1 Projects  Project Id  Enrich Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/things/{thing_id}/pins": {
+      "get": {
+        "summary": "Get Pinout",
+        "operationId": "get_pinout_api_v1_things__thing_id__pins_get",
+        "parameters": [
+          {
+            "name": "thing_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Thing Id"
+            }
+          },
+          {
+            "name": "openlab_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Openlab Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PinOut"
+                  },
+                  "title": "Response Get Pinout Api V1 Things  Thing Id  Pins Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "summary": "Replace Pinout",
+        "operationId": "replace_pinout_api_v1_things__thing_id__pins_put",
+        "parameters": [
+          {
+            "name": "thing_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Thing Id"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          },
+          {
+            "name": "openlab_csrf",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Openlab Csrf"
+            }
+          },
+          {
+            "name": "openlab_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Openlab Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PinoutReplace"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PinOut"
+                  },
+                  "title": "Response Replace Pinout Api V1 Things  Thing Id  Pins Put"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{project_id}/schematic": {
+      "post": {
+        "summary": "Queue Schematic",
+        "operationId": "queue_schematic_api_v1_projects__project_id__schematic_post",
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Project Id"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          },
+          {
+            "name": "openlab_csrf",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Openlab Csrf"
+            }
+          },
+          {
+            "name": "openlab_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Openlab Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SchematicRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{project_id}/schematic/accept": {
+      "post": {
+        "summary": "Accept Project Schematic",
+        "operationId": "accept_project_schematic_api_v1_projects__project_id__schematic_accept_post",
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Project Id"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          },
+          {
+            "name": "openlab_csrf",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Openlab Csrf"
+            }
+          },
+          {
+            "name": "openlab_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Openlab Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SchematicAccept"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectDetailOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{project_id}/schematic.kicad_sch": {
+      "get": {
+        "summary": "Download Project Schematic",
+        "operationId": "download_project_schematic_api_v1_projects__project_id__schematic_kicad_sch_get",
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Project Id"
+            }
+          },
+          {
+            "name": "openlab_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Openlab Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/ai/query": {
       "post": {
         "summary": "Ai Query",
@@ -2879,6 +4548,49 @@
         ],
         "title": "Body_upload_inbox_attachment_api_v1_inbox__inbox_id__attachments_post"
       },
+      "BuildPlanAccept": {
+        "properties": {
+          "job_id": {
+            "type": "string",
+            "title": "Job Id"
+          },
+          "solution_id": {
+            "type": "string",
+            "title": "Solution Id"
+          },
+          "revision": {
+            "type": "integer",
+            "title": "Revision"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "job_id",
+          "solution_id",
+          "revision"
+        ],
+        "title": "BuildPlanAccept"
+      },
+      "BuildPlanRequest": {
+        "properties": {
+          "goal": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 4000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Goal"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "BuildPlanRequest"
+      },
       "CompatibilityRequest": {
         "properties": {
           "required_capabilities": {
@@ -3064,13 +4776,50 @@
         "type": "object",
         "title": "HTTPValidationError"
       },
-      "InboxCandidateInput": {
+      "InboxCandidateBatchConfirm": {
+        "properties": {
+          "candidate_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 100,
+            "minItems": 1,
+            "title": "Candidate Ids"
+          }
+        },
+        "type": "object",
+        "required": [
+          "candidate_ids"
+        ],
+        "title": "InboxCandidateBatchConfirm"
+      },
+      "InboxCandidateConfirm": {
         "properties": {
           "name": {
-            "type": "string",
-            "maxLength": 300,
-            "minLength": 1,
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 300,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Name"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 600
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
           },
           "quantity": {
             "anyOf": [
@@ -3081,33 +4830,50 @@
               {
                 "type": "string",
                 "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
+              },
+              {
+                "type": "null"
               }
             ],
             "title": "Quantity"
           },
           "category": {
-            "type": "string",
-            "title": "Category",
-            "default": "uncategorized"
-          },
-          "confidence": {
-            "type": "string",
-            "enum": [
-              "confirmed",
-              "likely",
-              "generic",
-              "unresolved"
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "module",
+                  "ic",
+                  "board",
+                  "sensor",
+                  "passive",
+                  "connector",
+                  "power",
+                  "tool",
+                  "other",
+                  "uncategorized"
+                ]
+              },
+              {
+                "type": "null"
+              }
             ],
-            "title": "Confidence",
-            "default": "unresolved"
+            "title": "Category"
+          },
+          "existing_thing_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Existing Thing Id"
           }
         },
         "type": "object",
-        "required": [
-          "name",
-          "quantity"
-        ],
-        "title": "InboxCandidateInput"
+        "title": "InboxCandidateConfirm"
       },
       "InboxCandidateOut": {
         "properties": {
@@ -3128,9 +4894,35 @@
             "type": "string",
             "title": "Category"
           },
-          "confidence": {
+          "identity_confidence": {
             "type": "string",
-            "title": "Confidence"
+            "title": "Identity Confidence"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "thing_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Thing Id"
+          },
+          "product_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Product Url"
           },
           "provenance": {
             "additionalProperties": true,
@@ -3144,10 +4936,113 @@
           "name",
           "quantity",
           "category",
-          "confidence",
+          "identity_confidence",
+          "status",
+          "thing_id",
+          "product_url",
           "provenance"
         ],
         "title": "InboxCandidateOut"
+      },
+      "InboxCandidatePatch": {
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 300,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 600
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "quantity": {
+            "anyOf": [
+              {
+                "type": "number",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quantity"
+          },
+          "category": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "module",
+                  "ic",
+                  "board",
+                  "sensor",
+                  "passive",
+                  "connector",
+                  "power",
+                  "tool",
+                  "other",
+                  "uncategorized"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "InboxCandidatePatch"
+      },
+      "InboxCandidateReceive": {
+        "properties": {
+          "location_id": {
+            "type": "string",
+            "title": "Location Id"
+          },
+          "quantity": {
+            "anyOf": [
+              {
+                "type": "number",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quantity"
+          }
+        },
+        "type": "object",
+        "required": [
+          "location_id"
+        ],
+        "title": "InboxCandidateReceive"
       },
       "InboxCapture": {
         "properties": {
@@ -3158,7 +5053,8 @@
               "photo",
               "screenshot",
               "voice",
-              "pdf"
+              "pdf",
+              "email"
             ],
             "title": "Input Type"
           },
@@ -3181,33 +5077,20 @@
         ],
         "title": "InboxCapture"
       },
-      "InboxConfirm": {
+      "InboxEnrichURL": {
         "properties": {
-          "location_id": {
+          "url": {
             "type": "string",
-            "title": "Location Id"
-          },
-          "candidate": {
-            "$ref": "#/components/schemas/InboxCandidateInput"
-          },
-          "existing_thing_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Existing Thing Id"
+            "maxLength": 2000,
+            "minLength": 8,
+            "title": "Url"
           }
         },
         "type": "object",
         "required": [
-          "location_id",
-          "candidate"
+          "url"
         ],
-        "title": "InboxConfirm"
+        "title": "InboxEnrichURL"
       },
       "InboxOut": {
         "properties": {
@@ -3267,6 +5150,167 @@
           "created_at"
         ],
         "title": "InboxOut"
+      },
+      "InterfaceInput": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Kind"
+          },
+          "details": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Details"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "kind"
+        ],
+        "title": "InterfaceInput"
+      },
+      "JobOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "result": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Result"
+          },
+          "attempts": {
+            "type": "integer",
+            "title": "Attempts"
+          },
+          "last_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Error"
+          },
+          "expires_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expires At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "kind",
+          "status",
+          "result",
+          "attempts",
+          "last_error",
+          "expires_at"
+        ],
+        "title": "JobOut"
+      },
+      "KnowledgeSearchRequest": {
+        "properties": {
+          "query": {
+            "type": "string",
+            "maxLength": 1000,
+            "minLength": 1,
+            "title": "Query"
+          },
+          "limit": {
+            "type": "integer",
+            "maximum": 30.0,
+            "minimum": 1.0,
+            "title": "Limit",
+            "default": 10
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "query"
+        ],
+        "title": "KnowledgeSearchRequest"
+      },
+      "KnowledgeSearchResult": {
+        "properties": {
+          "thing_id": {
+            "type": "string",
+            "title": "Thing Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "category": {
+            "type": "string",
+            "title": "Category"
+          },
+          "score": {
+            "type": "number",
+            "title": "Score"
+          },
+          "match_type": {
+            "type": "string",
+            "enum": [
+              "exact",
+              "text",
+              "semantic"
+            ],
+            "title": "Match Type"
+          },
+          "available_quantity": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Available Quantity"
+          },
+          "locations": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Locations"
+          }
+        },
+        "type": "object",
+        "required": [
+          "thing_id",
+          "name",
+          "category",
+          "score",
+          "match_type",
+          "available_quantity"
+        ],
+        "title": "KnowledgeSearchResult"
       },
       "LabOut": {
         "properties": {
@@ -3375,6 +5419,206 @@
         ],
         "title": "LoginRequest"
       },
+      "PinInput": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "role": {
+            "type": "string",
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Role"
+          },
+          "number": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 40
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Number"
+          },
+          "electrical_type": {
+            "type": "string",
+            "enum": [
+              "power_in",
+              "power_out",
+              "ground",
+              "input",
+              "output",
+              "bidirectional",
+              "open_drain",
+              "passive",
+              "no_connect"
+            ],
+            "title": "Electrical Type",
+            "default": "passive"
+          },
+          "alternate_functions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 30,
+            "title": "Alternate Functions"
+          },
+          "restrictions": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Restrictions"
+          },
+          "details": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Details"
+          },
+          "source_ref": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 600
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Ref"
+          },
+          "verification_state": {
+            "type": "string",
+            "enum": [
+              "unverified",
+              "accepted",
+              "verified"
+            ],
+            "title": "Verification State",
+            "default": "unverified"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "name",
+          "role"
+        ],
+        "title": "PinInput"
+      },
+      "PinOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "role": {
+            "type": "string",
+            "title": "Role"
+          },
+          "number": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Number"
+          },
+          "electrical_type": {
+            "type": "string",
+            "title": "Electrical Type"
+          },
+          "alternate_functions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Alternate Functions"
+          },
+          "restrictions": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Restrictions"
+          },
+          "details": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Details"
+          },
+          "source_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Ref"
+          },
+          "verification_state": {
+            "type": "string",
+            "title": "Verification State"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "role",
+          "number",
+          "electrical_type",
+          "alternate_functions",
+          "restrictions",
+          "details",
+          "source_ref",
+          "verification_state"
+        ],
+        "title": "PinOut"
+      },
+      "PinoutReplace": {
+        "properties": {
+          "pins": {
+            "items": {
+              "$ref": "#/components/schemas/PinInput"
+            },
+            "type": "array",
+            "maxItems": 300,
+            "minItems": 1,
+            "title": "Pins"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "pins"
+        ],
+        "title": "PinoutReplace"
+      },
       "ProjectCreate": {
         "properties": {
           "name": {
@@ -3426,6 +5670,20 @@
             "type": "string",
             "title": "Status"
           },
+          "revision": {
+            "type": "integer",
+            "title": "Revision"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          },
           "requirements": {
             "items": {
               "$ref": "#/components/schemas/RequirementOut"
@@ -3439,6 +5697,11 @@
             },
             "type": "array",
             "title": "Allocations"
+          },
+          "design_json": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Design Json"
           }
         },
         "type": "object",
@@ -3447,8 +5710,12 @@
           "name",
           "description",
           "status",
+          "revision",
+          "created_at",
+          "updated_at",
           "requirements",
-          "allocations"
+          "allocations",
+          "design_json"
         ],
         "title": "ProjectDetailOut"
       },
@@ -3476,6 +5743,20 @@
           "status": {
             "type": "string",
             "title": "Status"
+          },
+          "revision": {
+            "type": "integer",
+            "title": "Revision"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
           }
         },
         "type": "object",
@@ -3483,9 +5764,62 @@
           "id",
           "name",
           "description",
-          "status"
+          "status",
+          "revision",
+          "created_at",
+          "updated_at"
         ],
         "title": "ProjectOut"
+      },
+      "ProjectUpdate": {
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 300,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "pending",
+                  "active",
+                  "completed",
+                  "archived",
+                  "cancelled"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "ProjectUpdate"
       },
       "ProviderConfigInput": {
         "properties": {
@@ -3500,6 +5834,18 @@
             "maxLength": 300,
             "minLength": 1,
             "title": "Model"
+          },
+          "embedding_model": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 300
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Embedding Model"
           },
           "api_key": {
             "anyOf": [
@@ -3516,6 +5862,11 @@
           "enabled": {
             "type": "boolean",
             "title": "Enabled",
+            "default": false
+          },
+          "embeddings_enabled": {
+            "type": "boolean",
+            "title": "Embeddings Enabled",
             "default": false
           }
         },
@@ -3545,9 +5896,24 @@
             "type": "string",
             "title": "Model"
           },
+          "embedding_model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Embedding Model"
+          },
           "enabled": {
             "type": "boolean",
             "title": "Enabled"
+          },
+          "embeddings_enabled": {
+            "type": "boolean",
+            "title": "Embeddings Enabled"
           },
           "has_api_key": {
             "type": "boolean",
@@ -3568,7 +5934,9 @@
           "provider",
           "base_url",
           "model",
+          "embedding_model",
           "enabled",
+          "embeddings_enabled",
           "has_api_key",
           "egress"
         ],
@@ -3666,6 +6034,43 @@
             "additionalProperties": true,
             "type": "object",
             "title": "Constraints"
+          },
+          "source": {
+            "type": "string",
+            "title": "Source"
+          },
+          "role_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Role Key"
+          },
+          "selected_thing_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Selected Thing Id"
+          },
+          "match_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Match Status"
           }
         },
         "type": "object",
@@ -3674,9 +6079,51 @@
           "name",
           "quantity",
           "priority",
-          "constraints"
+          "constraints",
+          "source",
+          "role_key",
+          "selected_thing_id",
+          "match_status"
         ],
         "title": "RequirementOut"
+      },
+      "SchematicAccept": {
+        "properties": {
+          "job_id": {
+            "type": "string",
+            "title": "Job Id"
+          },
+          "revision": {
+            "type": "integer",
+            "title": "Revision"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "job_id",
+          "revision"
+        ],
+        "title": "SchematicAccept"
+      },
+      "SchematicRequest": {
+        "properties": {
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "SchematicRequest"
       },
       "SetupRequest": {
         "properties": {
@@ -3899,6 +6346,29 @@
           "name"
         ],
         "title": "ThingCreate"
+      },
+      "ThingKnowledgeReplace": {
+        "properties": {
+          "capabilities": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 100,
+            "title": "Capabilities"
+          },
+          "interfaces": {
+            "items": {
+              "$ref": "#/components/schemas/InterfaceInput"
+            },
+            "type": "array",
+            "maxItems": 50,
+            "title": "Interfaces"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "ThingKnowledgeReplace"
       },
       "ThingOut": {
         "properties": {

@@ -1,146 +1,100 @@
 "use client";
 
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useState } from "react";
-import { api, idempotencyHeaders, type Location, type Project, type ProjectDetail, type Thing } from "@/lib/api";
+import { api, type Project } from "@/lib/api";
 import { LabIcon } from "./lab-icon";
 import { Shell } from "./shell";
 
-export function Projects() {
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [detail, setDetail] = useState<ProjectDetail | null>(null);
-  const [things, setThings] = useState<Thing[]>([]);
-  const [locations, setLocations] = useState<Location[]>([]);
-  const [error, setError] = useState("");
+const DATE_FORMAT = new Intl.DateTimeFormat(undefined, { day: "2-digit", month: "short", year: "numeric" });
+const PAST_STATUSES = new Set(["completed", "archived", "cancelled"]);
 
-  const load = async () => {
-    try {
-      const [nextProjects, nextThings, nextLocations] = await Promise.all([
-        api<Project[]>("/projects"), api<Thing[]>("/things"), api<Location[]>("/locations"),
-      ]);
-      setProjects(nextProjects);
-      setThings(nextThings);
-      setLocations(nextLocations);
-      if (detail) setDetail(await api<ProjectDetail>(`/projects/${detail.id}`));
-    } catch (nextError) {
-      setError((nextError as Error).message);
-    }
-  };
+type BuildGroup = { key: "active" | "pending" | "past"; label: string; note: string; projects: Project[] };
+
+function groupProjects(projects: Project[]): BuildGroup[] {
+  const groups: BuildGroup[] = [
+    { key: "active", label: "Active builds", note: "Currently on the bench", projects: [] },
+    { key: "pending", label: "Pending builds", note: "Ideas and plans waiting to start", projects: [] },
+    { key: "past", label: "Past builds", note: "Completed and archived work", projects: [] },
+  ];
+  const byKey = new Map(groups.map((group) => [group.key, group]));
+  for (const project of projects) {
+    const key = PAST_STATUSES.has(project.status)
+      ? "past"
+      : project.status === "pending"
+        ? "pending"
+        : "active";
+    byKey.get(key)?.projects.push(project);
+  }
+  return groups;
+}
+
+export function Projects() {
+  const router = useRouter();
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [error, setError] = useState("");
+  const [creating, setCreating] = useState(false);
 
   useEffect(() => {
-    const timer = window.setTimeout(() => { void load(); }, 0);
-    return () => window.clearTimeout(timer);
-    // Initial client synchronization only; load is intentionally not a render dependency.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    let cancelled = false;
+    void api<Project[]>("/projects")
+      .then((value) => { if (!cancelled) setProjects(value); })
+      .catch((nextError: Error) => { if (!cancelled) setError(nextError.message); });
+    return () => { cancelled = true; };
   }, []);
-
-  async function select(id: string) {
-    try { setDetail(await api<ProjectDetail>(`/projects/${id}`)); }
-    catch (nextError) { setError((nextError as Error).message); }
-  }
 
   async function create(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = event.currentTarget;
     const data = new FormData(form);
+    setCreating(true);
+    setError("");
     try {
       const project = await api<Project>("/projects", {
         method: "POST",
         body: JSON.stringify({ name: data.get("name"), description: data.get("description") || null }),
       });
-      form.reset();
-      await load();
-      await select(project.id);
-    } catch (nextError) { setError((nextError as Error).message); }
+      router.push(`/projects/${project.id}`);
+    } catch (nextError) {
+      setError((nextError as Error).message);
+      setCreating(false);
+    }
   }
 
-  async function addRequirement(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!detail) return;
-    const form = event.currentTarget;
-    const data = new FormData(form);
-    try {
-      await api(`/projects/${detail.id}/requirements`, {
-        method: "POST",
-        body: JSON.stringify({ name: data.get("name"), quantity: Number(data.get("quantity")), priority: data.get("priority"), constraints: {} }),
-      });
-      form.reset();
-      await select(detail.id);
-    } catch (nextError) { setError((nextError as Error).message); }
-  }
+  const groups = groupProjects(projects);
+  const activeCount = groups[0].projects.length;
+  const pendingCount = groups[1].projects.length;
+  const pastCount = groups[2].projects.length;
 
-  async function allocate(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!detail) return;
-    const form = event.currentTarget;
-    const data = new FormData(form);
-    try {
-      await api(`/projects/${detail.id}/allocations`, {
-        method: "POST",
-        headers: idempotencyHeaders(),
-        body: JSON.stringify({ thing_id: data.get("thing_id"), location_id: data.get("location_id"), quantity: Number(data.get("quantity")), state: data.get("state") }),
-      });
-      form.reset();
-      await select(detail.id);
-    } catch (nextError) { setError((nextError as Error).message); }
-  }
-
-  return <Shell title="Projects & BUILD">
-    <section className="build-overview">
-      <div><p className="eyebrow">FROM IDEA TO BENCH</p><h2>Build with what you already own.</h2><p>Define requirements, reserve real stock, and keep every recoverable component traceable.</p></div>
-      <div className="build-stats"><span><b>{projects.length}</b><small>PROJECTS</small></span><i/><span><b>{things.length}</b><small>KNOWN THINGS</small></span></div>
+  return <Shell title="Builds">
+    <section className="build-overview build-index-hero">
+      <div><p className="eyebrow">PROJECT CONTROL</p><h2>Every build, from first idea to tested wiring.</h2><p>Track what is waiting, what is on the bench, and what you already completed. Open a build for its selected solution, pinouts, wiring, instructions, cost, and checks.</p></div>
+      <div className="build-stats"><span><b>{activeCount}</b><small>ACTIVE</small></span><i/><span><b>{pendingCount}</b><small>PENDING</small></span><i/><span><b>{pastCount}</b><small>PAST</small></span></div>
     </section>
     {error && <p className="error build-error">{error}</p>}
 
-    <div className="build-workspace">
-      <section className="project-index-panel">
-        <div className="build-panel-heading"><div><p className="eyebrow">NEW BUILD</p><h2>Create a project</h2></div><span><LabIcon name="plus"/></span></div>
-        <form className="project-create-form" onSubmit={create}>
-          <label><span>Project name</span><input name="name" placeholder="e.g. Battery plant monitor" required /></label>
-          <label><span>Purpose</span><input name="description" placeholder="What should it do? (optional)" /></label>
-          <button>Create project <LabIcon name="arrow"/></button>
-        </form>
+    <section className="build-create-card">
+      <div><p className="eyebrow">NEW BUILD</p><h2>Start with the outcome.</h2><p>Describe what the build should do. OpenLab will match it against your actual inventory.</p></div>
+      <form className="project-create-form project-create-inline" onSubmit={create}>
+        <label><span>Build name</span><input name="name" placeholder="e.g. Plant moisture monitor" required /></label>
+        <label><span>Purpose</span><input name="description" placeholder="What should it do?" /></label>
+        <button disabled={creating}>{creating ? "Creating…" : "Create build"}<LabIcon name="arrow"/></button>
+      </form>
+    </section>
 
-        <div className="project-list-heading"><span>YOUR PROJECTS</span><b>{projects.length}</b></div>
-        <div className="project-list">
-          {projects.map((project) => <button type="button" className={detail?.id === project.id ? "project-row active" : "project-row"} key={project.id} onClick={() => select(project.id)}>
-            <span className="project-row-icon"><LabIcon name="folder"/></span>
-            <span className="project-row-copy"><strong>{project.name}</strong><small>{project.description || "No description yet"}</small></span>
-            <span className="project-row-status"><i/>{project.status}</span>
-            <LabIcon className="project-row-arrow" name="arrow"/>
-          </button>)}
-          {projects.length === 0 && <div className="project-list-empty"><LabIcon name="folder"/><p>Your builds will appear here.</p></div>}
+    <div className="build-groups">
+      {groups.map((group) => <section className={`build-group is-${group.key}`} key={group.key}>
+        <div className="build-group-head"><div><p className="eyebrow">{group.key.toUpperCase()}</p><h2>{group.label}</h2><p>{group.note}</p></div><strong>{group.projects.length}</strong></div>
+        <div className="build-card-grid">
+          {group.projects.map((project) => <Link className="build-card" href={`/projects/${project.id}`} key={project.id}>
+            <span className="build-card-icon"><LabIcon name={project.status === "completed" ? "check" : "folder"}/></span>
+            <span className="build-card-main"><small>{project.status.replaceAll("_", " ")}</small><strong>{project.name}</strong><p>{project.description || "No purpose recorded yet."}</p></span>
+            <span className="build-card-meta"><small>UPDATED</small><time dateTime={project.updated_at}>{DATE_FORMAT.format(new Date(project.updated_at))}</time><LabIcon name="arrow"/></span>
+          </Link>)}
+          {group.projects.length === 0 && <div className="build-group-empty"><LabIcon name="folder"/><p>No {group.key} builds.</p></div>}
         </div>
-      </section>
-
-      {detail ? <section className="project-detail-panel">
-        <div className="project-detail-head"><div><p className="eyebrow">ACTIVE BUILD</p><h2>{detail.name}</h2><p>{detail.description || "Add requirements to start shaping this build."}</p></div><span className="build-status"><i/>{detail.status}</span></div>
-
-        <section className="build-block">
-          <div className="build-block-heading"><span className="build-block-icon"><LabIcon name="layers"/></span><div><h3>BOM requirements</h3><p>What the build needs, before matching it to stock.</p></div><b>{detail.requirements.length}</b></div>
-          <div className="build-item-list">{detail.requirements.map((item) => <div className="build-item" key={item.id}><span>{item.quantity}×</span><strong>{item.name}</strong><small>{item.priority}</small></div>)}{detail.requirements.length === 0 && <p className="build-empty-copy">No requirements yet. Add the first part or capability below.</p>}</div>
-          <form className="requirement-form" onSubmit={addRequirement}>
-            <input name="name" placeholder="Part or capability" required />
-            <input name="quantity" aria-label="Quantity" type="number" min="0.000001" step="any" defaultValue="1" required />
-            <select name="priority" aria-label="Priority" defaultValue="required"><option value="required">Required</option><option value="recommended">Recommended</option><option value="optional">Optional</option></select>
-            <button>Add</button>
-          </form>
-        </section>
-
-        <section className="build-block">
-          <div className="build-block-heading"><span className="build-block-icon cyan"><LabIcon name="box"/></span><div><h3>Stock allocations</h3><p>Reserve a real Thing from a known location.</p></div><b>{detail.allocations.length}</b></div>
-          <div className="build-item-list">{detail.allocations.map((item) => <div className="build-item" key={item.id}><span>{item.quantity}×</span><strong>{things.find((thing) => thing.id === item.thing_id)?.name ?? item.thing_id}</strong><small>{item.state.replace("_", " ")}</small></div>)}{detail.allocations.length === 0 && <p className="build-empty-copy">Nothing allocated yet. Requirements remain separate from physical stock.</p>}</div>
-          <form className="allocation-form" onSubmit={allocate}>
-            <select name="thing_id" required defaultValue=""><option value="" disabled>Choose Thing</option>{things.map((thing) => <option key={thing.id} value={thing.id}>{thing.name}</option>)}</select>
-            <select name="location_id" required defaultValue=""><option value="" disabled>Source location</option>{locations.map((location) => <option key={location.id} value={location.id}>{location.name}</option>)}</select>
-            <input name="quantity" aria-label="Quantity" type="number" min="0.000001" step="any" defaultValue="1" required />
-            <select name="state" aria-label="Allocation state" defaultValue="reserved"><option value="reserved">Reserve</option><option value="in_use">Move into use</option><option value="recoverable">Recoverable</option></select>
-            <button>Allocate</button>
-          </form>
-        </section>
-      </section> : <section className="build-empty-state">
-        <span className="empty-build-orb"><LabIcon name="spark"/></span><p className="eyebrow">BUILD WORKSPACE</p><h2>Select a project to open its bench.</h2><p>Requirements and physical allocations stay separate, so planning never silently changes your stock.</p>
-        <div className="empty-build-flow"><span>IDEA</span><i/><span>BOM</span><i/><span>STOCK</span><i/><span>BUILD</span></div>
-      </section>}
+      </section>)}
     </div>
   </Shell>;
 }

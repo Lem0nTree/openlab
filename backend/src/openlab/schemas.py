@@ -9,6 +9,10 @@ class APIModel(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class StrictInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+
 class SetupRequest(BaseModel):
     token: str
     lab_name: str = Field(min_length=1, max_length=200)
@@ -105,21 +109,65 @@ class BalanceOut(APIModel):
 
 
 class InboxCapture(BaseModel):
-    input_type: Literal["text", "photo", "screenshot", "voice", "pdf"]
+    input_type: Literal["text", "photo", "screenshot", "voice", "pdf", "email"]
     text: str | None = Field(default=None, max_length=20_000)
 
 
-class InboxCandidateInput(BaseModel):
+ThingCategory = Literal[
+    "module",
+    "ic",
+    "board",
+    "sensor",
+    "passive",
+    "connector",
+    "power",
+    "tool",
+    "other",
+    "uncategorized",
+]
+
+
+class InboxCandidateInput(StrictInput):
     name: str = Field(min_length=1, max_length=300)
+    description: str | None = Field(default=None, max_length=600)
     quantity: Decimal = Field(gt=0)
-    category: str = "uncategorized"
-    confidence: Literal["confirmed", "likely", "generic", "unresolved"] = "unresolved"
+    category: ThingCategory = "uncategorized"
+    identity_confidence: Literal["high", "medium", "low", "unresolved"] = "unresolved"
+    observations: list[str] = Field(default_factory=list, max_length=8)
 
 
 class InboxConfirm(BaseModel):
     location_id: str
     candidate: InboxCandidateInput
     existing_thing_id: str | None = None
+
+
+class InboxCandidateConfirm(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=300)
+    description: str | None = Field(default=None, max_length=600)
+    quantity: Decimal | None = Field(default=None, gt=0)
+    category: ThingCategory | None = None
+    existing_thing_id: str | None = None
+
+
+class InboxCandidatePatch(StrictInput):
+    name: str | None = Field(default=None, min_length=1, max_length=300)
+    description: str | None = Field(default=None, max_length=600)
+    quantity: Decimal | None = Field(default=None, gt=0)
+    category: ThingCategory | None = None
+
+
+class InboxCandidateReceive(BaseModel):
+    location_id: str
+    quantity: Decimal | None = Field(default=None, gt=0)
+
+
+class InboxCandidateBatchConfirm(BaseModel):
+    candidate_ids: list[str] = Field(min_length=1, max_length=100)
+
+
+class InboxEnrichURL(BaseModel):
+    url: str = Field(min_length=8, max_length=2000)
 
 
 class InboxOut(APIModel):
@@ -137,7 +185,10 @@ class InboxCandidateOut(APIModel):
     name: str
     quantity: Decimal
     category: str
-    confidence: str
+    identity_confidence: str
+    status: str
+    thing_id: str | None
+    product_url: str | None
     provenance: dict[str, object]
 
 
@@ -146,8 +197,10 @@ class ProviderConfigInput(BaseModel):
 
     base_url: str = Field(min_length=8, max_length=600)
     model: str = Field(min_length=1, max_length=300)
+    embedding_model: str | None = Field(default=None, max_length=300)
     api_key: str | None = Field(default=None, max_length=2000)
     enabled: bool = False
+    embeddings_enabled: bool = False
 
 
 class ProviderConfigOut(APIModel):
@@ -155,7 +208,9 @@ class ProviderConfigOut(APIModel):
     provider: str
     base_url: str
     model: str
+    embedding_model: str | None
     enabled: bool
+    embeddings_enabled: bool
     has_api_key: bool
     egress: Literal["local", "external"]
 
@@ -182,6 +237,15 @@ class ProjectOut(APIModel):
     name: str
     description: str | None
     status: str
+    revision: int
+    created_at: datetime
+    updated_at: datetime
+
+
+class ProjectUpdate(StrictInput):
+    name: str | None = Field(default=None, min_length=1, max_length=300)
+    description: str | None = Field(default=None, max_length=2000)
+    status: Literal["pending", "active", "completed", "archived", "cancelled"] | None = None
 
 
 class RequirementOut(APIModel):
@@ -190,6 +254,10 @@ class RequirementOut(APIModel):
     quantity: Decimal
     priority: str
     constraints: dict[str, object]
+    source: str
+    role_key: str | None
+    selected_thing_id: str | None
+    match_status: str | None
 
 
 class AllocationOut(APIModel):
@@ -203,6 +271,7 @@ class AllocationOut(APIModel):
 class ProjectDetailOut(ProjectOut):
     requirements: list[RequirementOut]
     allocations: list[AllocationOut]
+    design_json: dict[str, object]
 
 
 class AllocationCreate(BaseModel):
@@ -239,6 +308,99 @@ class CompatibilityResult(BaseModel):
     thing_id: str
     status: Literal["pass", "fail", "unknown"]
     evidence: list[str]
+
+
+class KnowledgeSearchRequest(StrictInput):
+    query: str = Field(min_length=1, max_length=1000)
+    limit: int = Field(default=10, ge=1, le=30)
+
+
+class KnowledgeSearchResult(BaseModel):
+    thing_id: str
+    name: str
+    category: str
+    score: float
+    match_type: Literal["exact", "text", "semantic"]
+    available_quantity: Decimal
+    locations: list[str] = Field(default_factory=list)
+
+
+class InterfaceInput(StrictInput):
+    kind: str = Field(min_length=1, max_length=100)
+    details: dict[str, object] = Field(default_factory=dict)
+
+
+class ThingKnowledgeReplace(StrictInput):
+    capabilities: list[str] = Field(default_factory=list, max_length=100)
+    interfaces: list[InterfaceInput] = Field(default_factory=list, max_length=50)
+
+
+class JobOut(APIModel):
+    id: str
+    kind: str
+    status: str
+    result: dict[str, object] | None
+    attempts: int
+    last_error: str | None
+    expires_at: datetime | None
+
+
+class BuildPlanRequest(StrictInput):
+    goal: str | None = Field(default=None, max_length=4000)
+
+
+class BuildPlanAccept(StrictInput):
+    job_id: str
+    solution_id: str
+    revision: int
+
+
+class PinInput(StrictInput):
+    name: str = Field(min_length=1, max_length=100)
+    role: str = Field(min_length=1, max_length=100)
+    number: str | None = Field(default=None, max_length=40)
+    electrical_type: Literal[
+        "power_in",
+        "power_out",
+        "ground",
+        "input",
+        "output",
+        "bidirectional",
+        "open_drain",
+        "passive",
+        "no_connect",
+    ] = "passive"
+    alternate_functions: list[str] = Field(default_factory=list, max_length=30)
+    restrictions: str | None = Field(default=None, max_length=2000)
+    details: dict[str, object] = Field(default_factory=dict)
+    source_ref: str | None = Field(default=None, max_length=600)
+    verification_state: Literal["unverified", "accepted", "verified"] = "unverified"
+
+
+class PinOut(APIModel):
+    id: str
+    name: str
+    role: str
+    number: str | None
+    electrical_type: str
+    alternate_functions: list[str]
+    restrictions: str | None
+    details: dict[str, object]
+    source_ref: str | None
+    verification_state: str
+
+
+class PinoutReplace(StrictInput):
+    pins: list[PinInput] = Field(min_length=1, max_length=300)
+
+
+class SchematicRequest(StrictInput):
+    notes: str | None = Field(default=None, max_length=2000)
+
+
+class SchematicAccept(StrictInput):
+    job_id: str
+    revision: int
 
 
 class AIQuery(BaseModel):
