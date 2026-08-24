@@ -1,0 +1,86 @@
+name: Deploy Pi
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: openlab-pi-production
+  cancel-in-progress: false
+
+jobs:
+  gate:
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push'
+    runs-on: ubuntu-latest
+    outputs:
+      deploy: ${{ steps.merged-pr.outputs.deploy }}
+      sha: ${{ steps.merged-pr.outputs.sha }}
+      pr: ${{ steps.merged-pr.outputs.pr }}
+    steps:
+      - name: Require an exact merged pull request
+        id: merged-pr
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const sha = context.payload.workflow_run.head_sha;
+            const { data: pulls } = await github.rest.repos.listPullRequestsAssociatedWithCommit({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              commit_sha: sha,
+            });
+            const merged = pulls.find((pull) =>
+              pull.merged_at !== null &&
+              pull.base.ref === 'main' &&
+              pull.merge_commit_sha === sha
+            );
+            core.setOutput('deploy', merged ? 'true' : 'false');
+            core.setOutput('sha', sha);
+            core.setOutput('pr', merged ? String(merged.number) : '');
+            if (!merged) {
+              core.notice(`Skipping ${sha}: it is not the merge result of a PR into main.`);
+            }
+
+  deploy:
+    name: Build on AWS and deploy to Pi
+    needs: gate
+    if: needs.gate.outputs.deploy == 'true'
+    runs-on: [self-hosted, linux, arm64, openlab-build]
+    timeout-minutes: 90
+    environment: pi3b-production
+    env:
+      DEPLOY_SHA: ${{ needs.gate.outputs.sha }}
+      DEPLOY_PR: ${{ needs.gate.outputs.pr }}
+      OPENLAB_PI_HOST: openlab-pi
+      OPENLAB_PI_ROOT: /home/pi/openlab
+    steps:
+      - name: Check out the exact merged commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.DEPLOY_SHA }}
+          fetch-depth: 1
+
+      - name: Reject a superseded merge
+        id: current
+        shell: bash
+        run: |
+          set -euo pipefail
+          remote_sha=$(git ls-remote origin refs/heads/main | cut -f1)
+          if [[ "$remote_sha" == "$DEPLOY_SHA" ]]; then
+            echo "deploy=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "deploy=false" >> "$GITHUB_OUTPUT"
+            echo "Skipping superseded merge $DEPLOY_SHA; main is now $remote_sha."
+          fi
+
+      - name: Build, transfer, and activate
+        if: steps.current.outputs.deploy == 'true'
+        shell: bash
+        run: bash deploy/automation/aws-build-deploy.sh "$DEPLOY_SHA"
