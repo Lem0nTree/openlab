@@ -357,6 +357,33 @@ def _manual_breakdown(db: Session, project: Project, goal: str) -> BuildBreakdow
     roles = _manual_roles(db, project)
     if roles:
         return BuildBreakdown(summary=goal[:600], roles=roles)
+    normalized = _normalize(goal)
+    tokens = set(normalized.split())
+    if tokens & {"plant", "soil"} and tokens & {"water", "watering", "moisture"}:
+        return BuildBreakdown(
+            summary="Monitor soil moisture and indicate when a plant needs water.",
+            roles=[
+                BuildRole(
+                    role_key="moisture_sensor",
+                    name="soil moisture sensor",
+                    category="sensor",
+                    required_capabilities=["soil moisture sensing"],
+                ),
+                BuildRole(
+                    role_key="controller",
+                    name="microcontroller development board",
+                    category="board",
+                    required_capabilities=["microcontroller"],
+                ),
+                BuildRole(
+                    role_key="indicator",
+                    name="visual indicator",
+                    priority="recommended",
+                    category="module",
+                    required_capabilities=["visual indicator"],
+                ),
+            ],
+        )
     return BuildBreakdown(
         summary=goal[:600],
         roles=[BuildRole(role_key="primary", name=goal[:300])],

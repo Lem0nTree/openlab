@@ -7,7 +7,7 @@ from pydantic import ValidationError
 from pypdf import PdfWriter
 
 from openlab.demo_seed import COMMON_MODULES
-from openlab.intelligence import BuildBreakdown, _valid_vector
+from openlab.intelligence import BuildBreakdown, _manual_breakdown, _valid_vector
 from openlab.main import app, confirm_candidate_identity, update_candidate_proposal
 from openlab.models import InboxCandidate
 from openlab.providers import OpenAICompatibleProvider, ProviderError
@@ -144,6 +144,22 @@ def test_embedding_vectors_must_be_nonempty_finite_numbers() -> None:
     for invalid in ([], [1, float("nan")], [1, "bad"], [True, 0]):
         with pytest.raises(ProviderError):
             _valid_vector(invalid)
+
+
+def test_plant_monitor_fallback_uses_functional_inventory_roles(monkeypatch) -> None:
+    monkeypatch.setattr("openlab.intelligence._manual_roles", lambda _db, _project: [])
+    project = type("ProjectStub", (), {})()
+    breakdown = _manual_breakdown(  # type: ignore[arg-type]
+        None,
+        project,
+        "I want to make a plant monitor to know when it needs water",
+    )
+    assert [role.role_key for role in breakdown.roles] == [
+        "moisture_sensor",
+        "controller",
+        "indicator",
+    ]
+    assert breakdown.roles[0].required_capabilities == ["soil moisture sensing"]
 
 
 def test_canonical_profile_contains_only_approved_retrieval_fields() -> None:
