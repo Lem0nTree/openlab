@@ -3,7 +3,7 @@ import type { ReactNode, SVGProps } from "react";
 export type LabIconName =
   | "spark" | "grid" | "inbox" | "box" | "pin" | "folder" | "settings"
   | "arrow" | "camera" | "mail" | "mic" | "text" | "search" | "chip"
-  | "bolt" | "layers" | "check" | "plus" | "command" | "image" | "file" | "edit";
+  | "bolt" | "layers" | "check" | "plus" | "command" | "image" | "file" | "edit" | "repeat";
 
 const paths: Record<LabIconName, ReactNode> = {
   spark: <><path d="m12 2 1.25 5.75L19 9l-5.75 1.25L12 16l-1.25-5.75L5 9l5.75-1.25L12 2Z"/><path d="m19 15 .65 2.35L22 18l-2.35.65L19 21l-.65-2.35L16 18l2.35-.65L19 15Z"/></>,
@@ -28,6 +28,7 @@ const paths: Record<LabIconName, ReactNode> = {
   image: <><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8.5" cy="9" r="1.5"/><path d="m4 17 5-5 4 4 2-2 5 4"/></>,
   file: <><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v5h5M9 13h6M9 17h6"/></>,
   edit: <><path d="m4 16.5-.7 3.2 3.2-.7L18.7 6.8a2 2 0 0 0-2.8-2.8L3.7 16.1"/><path d="m14.5 5.5 4 4"/></>,
+  repeat: <><path d="m17 2 4 4-4 4"/><path d="M3 11V9a3 3 0 0 1 3-3h15"/><path d="m7 22-4-4 4-4"/><path d="M21 13v2a3 3 0 0 1-3 3H3"/></>,
 };
 
 export function LabIcon({ name, ...props }: { name: LabIconName } & SVGProps<SVGSVGElement>) {

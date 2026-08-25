@@ -8,7 +8,7 @@ import re
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from itertools import product
-from typing import Literal, cast
+from typing import Literal, Protocol, cast
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from sqlalchemy import select
@@ -51,6 +51,14 @@ class BuildRole(StrictModel):
 class BuildBreakdown(StrictModel):
     summary: str = Field(min_length=1, max_length=600)
     roles: list[BuildRole] = Field(min_length=1, max_length=20)
+
+
+class CompatibilityRole(Protocol):
+    quantity: Decimal
+    category: str | None
+    required_capabilities: list[str]
+    required_interfaces: list[str]
+    minimum_facts: dict[str, Decimal]
 
 
 def _provider_config(db: Session, lab_id: str) -> ProviderConfig | None:
@@ -228,7 +236,7 @@ def _inventory_retrieval_values(
 
 
 def search_inventory(
-    db: Session, lab_id: str, query: str, limit: int = 10
+    db: Session, lab_id: str, query: str, limit: int = 10, *, allow_semantic: bool = True
 ) -> list[dict[str, object]]:
     things = list(
         db.scalars(select(Thing).where(Thing.lab_id == lab_id, Thing.archived_at.is_(None))).all()
@@ -256,7 +264,7 @@ def search_inventory(
 
     semantic: dict[str, float] = {}
     try:
-        provider, config = active_embedding_provider(db, lab_id)
+        provider, config = active_embedding_provider(db, lab_id) if allow_semantic else (None, None)
     except ProviderError:
         provider, config = None, None
     if provider and config and config.embedding_model:
@@ -476,7 +484,7 @@ def _decompose_build(db: Session, project: Project, goal: str) -> BuildBreakdown
 
 
 def _compatibility(
-    db: Session, thing_id: str, role: BuildRole, available: Decimal
+    db: Session, thing_id: str, role: CompatibilityRole, available: Decimal
 ) -> tuple[Literal["pass", "fail", "unknown"], list[str]]:
     evidence: list[str] = []
     status: Literal["pass", "fail", "unknown"] = "pass"

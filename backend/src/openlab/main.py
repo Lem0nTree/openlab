@@ -18,6 +18,7 @@ from qrcode.image.svg import SvgPathImage  # type: ignore[import-untyped]
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, aliased
 
+from .alternatives import create_build_from_alternative
 from .config import get_settings
 from .db import get_db
 from .enrichment import enrich_thing, queue_thing_enrichment
@@ -56,6 +57,7 @@ from .schemas import (
     AIQuery,
     AllocationCreate,
     AllocationRecover,
+    AlternativeSearchRequest,
     BalanceOut,
     BuildPlanAccept,
     BuildPlanRequest,
@@ -978,15 +980,7 @@ def capture_inbox(
     return item
 
 
-@app.get("/api/v1/projects/{project_id}", response_model=ProjectDetailOut)
-def get_project(
-    project_id: str, user: User = Depends(current_user), db: Session = Depends(get_db)
-) -> dict[str, object]:
-    project = db.scalar(
-        select(Project).where(Project.id == project_id, Project.lab_id == lab_for_user(db, user))
-    )
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
+def project_detail(db: Session, project: Project) -> dict[str, object]:
     return {
         "id": project.id,
         "name": project.name,
@@ -1003,6 +997,18 @@ def get_project(
             db.scalars(select(Allocation).where(Allocation.project_id == project.id)).all()
         ),
     }
+
+
+@app.get("/api/v1/projects/{project_id}", response_model=ProjectDetailOut)
+def get_project(
+    project_id: str, user: User = Depends(current_user), db: Session = Depends(get_db)
+) -> dict[str, object]:
+    project = db.scalar(
+        select(Project).where(Project.id == project_id, Project.lab_id == lab_for_user(db, user))
+    )
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    return project_detail(db, project)
 
 
 @app.post(
@@ -1621,6 +1627,98 @@ def knowledge_search(
     db: Session = Depends(get_db),
 ) -> list[dict[str, object]]:
     return search_inventory(db, lab_for_user(db, user), payload.query, payload.limit)
+
+
+@app.post(
+    "/api/v1/alternatives/search",
+    response_model=JobOut,
+    status_code=202,
+    dependencies=[Depends(require_csrf)],
+)
+def queue_alternative_search(
+    payload: AlternativeSearchRequest,
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+) -> Job:
+    lab_id = lab_for_user(db, user)
+    target_name = payload.target_name.strip()
+    intended_use = payload.intended_use.strip() if payload.intended_use else None
+    pending = db.scalars(
+        select(Job).where(
+            Job.lab_id == lab_id,
+            Job.kind == "inventory.inverse_search",
+            Job.status.in_(["queued", "running"]),
+        )
+    ).all()
+    for job in pending:
+        if (
+            str(job.payload.get("target_name", "")).casefold() == target_name.casefold()
+            and str(job.payload.get("intended_use") or "").casefold()
+            == str(intended_use or "").casefold()
+        ):
+            return job
+    job = Job(
+        lab_id=lab_id,
+        kind="inventory.inverse_search",
+        payload={"target_name": target_name, "intended_use": intended_use},
+    )
+    db.add(job)
+    db.flush()
+    audit(db, user, "alternative.search_queued", "job", job.id, target_name=target_name)
+    db.commit()
+    return job
+
+
+@app.get("/api/v1/alternatives/searches", response_model=list[JobOut])
+def list_alternative_searches(
+    limit: int = Query(default=20, ge=1, le=50),
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+) -> list[Job]:
+    return list(
+        db.scalars(
+            select(Job)
+            .where(
+                Job.lab_id == lab_for_user(db, user),
+                Job.kind == "inventory.inverse_search",
+            )
+            .order_by(Job.created_at.desc())
+            .limit(limit)
+        ).all()
+    )
+
+
+@app.post(
+    "/api/v1/alternatives/{job_id}/solutions/{solution_id}/build",
+    response_model=ProjectDetailOut,
+    status_code=201,
+    dependencies=[Depends(require_csrf)],
+)
+def create_alternative_build(
+    job_id: str,
+    solution_id: str,
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+) -> dict[str, object]:
+    try:
+        project, created = create_build_from_alternative(
+            db, lab_for_user(db, user), job_id, solution_id
+        )
+    except (TypeError, ValueError) as exc:
+        code = 404 if str(exc) == "Alternative search not found" else 409
+        raise HTTPException(status_code=code, detail=str(exc)) from exc
+    if created:
+        audit(
+            db,
+            user,
+            "project.created_from_alternative",
+            "project",
+            project.id,
+            job_id=job_id,
+            solution_id=solution_id,
+        )
+    db.commit()
+    return project_detail(db, project)
 
 
 @app.put(
