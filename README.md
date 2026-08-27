@@ -1,59 +1,51 @@
 # OpenLab
 
-OpenLab is a local-first inventory and build workspace for an electronics lab.
+### Stop cataloguing parts. Start building with them.
 
-## Run it with Docker
+OpenLab is a local-first workspace for electronics labs. Capture what arrived, review what the model understood, find every component by drawer, and turn the stock you actually own into a practical build plan.
 
-1. Optionally copy the environment template if you want to provide deployment-specific
-   values. The bootstrap command below creates it automatically when it is missing.
+<p align="center">
+  <a href="https://github.com/Lem0nTree/openlab/stargazers"><strong>⭐ Star OpenLab if you want a smarter, self-hosted lab bench</strong></a>
+</p>
 
-   ```powershell
-   Copy-Item .env.example .env
-   ```
+![OpenLab turns real inventory into the beginning of a build plan](screen/whatwebuild.png)
 
-2. Bootstrap persistent secrets and start the stack.
+## From “what is in this box?” to “what can I build?”
 
-   ```bash
-   sh deploy/up.sh --build
-   ```
+OpenLab connects the parts of lab work that normally live in separate apps, spreadsheets, and memory:
 
-   The bootstrap step generates `OPENLAB_SECRET_KEY`,
-   `OPENLAB_ENCRYPTION_KEY`, and the initial PostgreSQL password when they are
-   missing. Existing non-empty secrets are preserved, so restarting or
-   redeploying the stack does not invalidate sessions or stored provider keys.
-   Do not delete `.env` or regenerate `OPENLAB_ENCRYPTION_KEY` unless you are
-   intentionally rotating secrets and will re-enter provider API keys.
+1. **Capture** — add text, photos, screenshots, voice recordings, or PDFs to one review queue.
+2. **Understand** — optionally use any compatible local or hosted AI model to propose identities while preserving confidence and provenance.
+3. **Store** — confirm every inventory write yourself, track stock movements, and print QR labels for drawers, bins, and shelves.
+4. **Build** — describe an idea and get bounded solutions based on available stock, reviewed pin data, and explicit missing components.
 
-3. Open `http://localhost:3000`, copy the one-time setup token printed by
-   `openlab-server`, then create the owner account.
+| Capture what arrived | Put it in the right place |
+| --- | --- |
+| ![Multimodal capture in OpenLab](screen/multimodalcapture.png) | ![QR-coded storage locations in OpenLab](screen/locationqr.png) |
 
-The Compose stack includes PostgreSQL/pgvector, FastAPI, the PostgreSQL worker,
-and the Next.js web app. Stop it with `docker compose --env-file .env -f deploy/compose.yml down`.
-Your database and attachment volumes are retained.
+## What makes OpenLab different
 
-## Automatic deployment
+- **Review-first Smart Inbox** — model output never becomes stock until a person confirms it.
+- **Bring your own intelligence** — connect OpenAI, OpenRouter, Ollama, LM Studio, vLLM, or another `/v1`-compatible endpoint; AI stays optional.
+- **Inventory with a physical memory** — hierarchical locations, QR labels, balances, receipts, moves, usage, and an auditable movement history.
+- **Inventory-grounded BUILD** — search by capability, compare owned-item combinations, expose missing requirements, and allocate real stock deliberately.
+- **Safer wiring proposals** — sourced pin records, deterministic electrical checks, downloadable KiCad schematics, and optional `kicad-cli` ERC.
+- **Local-first deployment** — run the full stack with Docker Compose, with an optional [CI-gated ARM64 build-to-Pi path](docs/AUTOMATIC_DEPLOYMENT.md).
 
-Merges to `main` deploy to the Raspberry Pi only after the exact merge commit
-passes CI. ARM64 images are built on `aws-t3mini` and transferred to the Pi over
-Tailscale by a private self-hosted runner. See
-[`docs/AUTOMATIC_DEPLOYMENT.md`](docs/AUTOMATIC_DEPLOYMENT.md) for the trust,
-retention, rollback, and host-setup contract.
+![A complete OpenLab build workspace with selected components, connection checks, instructions, allocations, and pin data](screen/buildpagedetails.png)
 
-## Configure Smart Inbox
+## How it compares
 
-Open **Inbox → Smart Inbox model** after signing in. Set a compatible endpoint
-and model, then enable it. The same adapter supports OpenRouter, OpenAI, Ollama,
-LM Studio, vLLM, and other services exposing `/v1/chat/completions`.
+OpenLab is built for the maker who wants to move from messy bench intake to a build grounded in real inventory. Other excellent tools optimize for different jobs:
 
-- Local Ollama on the Docker host: `http://host.docker.internal:11434/v1`
-- OpenRouter: `https://openrouter.ai/api/v1`
-- OpenAI: `https://api.openai.com/v1`
+| Product | Best fit | Intake workflow | Build workflow | Hosting |
+| --- | --- | --- | --- | --- |
+| **OpenLab** | Electronics labs that want one capture-to-build loop | Review-first text, photo, screenshot, voice, and PDF capture | Proposes solutions from owned stock, then checks recorded pins and wiring | Self-hosted Docker |
+| [Part-DB](https://docs.part-db.de/) | Deep component cataloguing and traditional project BOMs | Barcode scanning, imports, and supplier/shop enrichment | BOM buildability counts and component withdrawal | Self-hosted web app |
+| [InvenTree](https://inventree.org/) | Structured business inventory and manufacturing | Extensible APIs, imports, and plugins | Multi-level BOMs, build orders, allocation, and disassembly | Open-source and self-hosted |
+| [Binner](https://binner.io/features) | Maker inventory with distributor integrations | Barcodes, order imports, and automatic part metadata | Project BOM tracking | Self-hosted or hosted cloud |
 
-For an endpoint needing an API key, `deploy/up.sh` ensures that
-`OPENLAB_ENCRYPTION_KEY` exists before the provider configuration is saved.
-The key is stored encrypted and never returned through the API. The Inbox
-displays whether captured data stays local or leaves the server before it is
-processed.
+OpenLab is not trying to replace a full ERP or procurement suite. It is the shortest path from **“this arrived”** to **“I can build this safely with what I have.”**
 
 ## Find stock-backed alternatives
 
@@ -73,30 +65,38 @@ and evidence rules.
 
 ## Configure the lab and KiCad
 
-Open **Settings** as the lab owner to change the lab name, measurement system,
-AI provider, and optional KiCad command. The KiCad value is a command or path
-inside the worker container, not a path on the Docker host. A saved Settings
-value takes precedence over `OPENLAB_KICAD_CLI`; clearing it restores the
-environment fallback.
+You need Docker with Compose. From the repository root:
 
-The standard Raspberry Pi image does not install KiCad. Use a custom
-KiCad-enabled backend/worker image, then enter `kicad-cli` or its absolute
-container path and run **Check again**. The Deployment section lists the other
-supported environment variables without returning secrets. Edit those values
-in the repository-root `.env` and recreate the affected services.
+```bash
+git clone https://github.com/Lem0nTree/openlab.git
+cd openlab
+sh deploy/up.sh --build
+```
 
-See [MVP 1 Smart Inbox](docs/MVP1_SMART_INBOX.md) and
-[remaining scope](docs/REMAINING_FEATURES.md) for implementation status.
+Open [http://localhost:3000](http://localhost:3000), copy the one-time setup token printed by `openlab-server`, and create the owner account. OpenLab generates missing secrets on first run and preserves existing values and persistent volumes across restarts.
 
-## Print drawer labels
+To stop the stack without deleting your data:
 
-Open **Locations**, choose a drawer, and preview, download, or print its QR label. Scanning the
-label opens Capture with that drawer preselected. Set `OPENLAB_PUBLIC_URL` to a stable address such
-as `http://pi3b.local:3000` before printing permanent labels; otherwise OpenLab uses the browser
-address shown on the label screen.
+```bash
+docker compose --env-file .env -f deploy/compose.yml down
+```
 
-## Repository layout
+### Configure optional AI
 
-- `backend/` — FastAPI modular monolith, PostgreSQL worker, and migrations.
-- `web/` — Next.js PWA and generated OpenAPI types.
-- `deploy/` — Docker Compose, Dockerfiles, backup, and restore scripts.
+Go to **Settings → Smart Inbox**, select a preset or compatible endpoint, choose a model, and decide whether processing is enabled. OpenLab clearly marks local versus external processing; provider keys are encrypted and never returned through the API.
+
+See [Smart Inbox](docs/MVP1_SMART_INBOX.md), [item intelligence and BUILD](docs/ITEM_INTELLIGENCE.md), and [remaining scope](docs/REMAINING_FEATURES.md) for the exact current contract and roadmap.
+
+## Project map
+
+- `backend/` — FastAPI API, PostgreSQL worker, migrations, and tests
+- `web/` — responsive Next.js PWA and generated OpenAPI types
+- `deploy/` — Docker Compose, images, secret bootstrap, backup, and restore tools
+- `screen/` — current product screenshots
+
+OpenLab is under active development and licensed under [Apache 2.0](LICENSE). Contributions and honest field reports are welcome.
+
+<p align="center">
+  <strong>Own your lab data. Know your stock. Build more.</strong><br />
+  <a href="https://github.com/Lem0nTree/openlab/stargazers">⭐ Give OpenLab a star</a> · <a href="https://github.com/Lem0nTree/openlab/issues">Share an idea</a>
+</p>
