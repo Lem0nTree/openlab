@@ -47,7 +47,23 @@ OpenLab is built for the maker who wants to move from messy bench intake to a bu
 
 OpenLab is not trying to replace a full ERP or procurement suite. It is the shortest path from **“this arrived”** to **“I can build this safely with what I have.”**
 
-## Start your lab
+## Find stock-backed alternatives
+
+Open **Alternatives** to search for a replacement for one component or board.
+Enter its name and, when useful, the intended use. OpenLab checks reviewed
+local knowledge and available inventory first; only when that is insufficient
+does it use the configured OpenAI-compatible provider. It never performs live
+web research, and the result states whether provider processing was local or
+external.
+
+Results are advisory and expire after 24 hours. They separate direct stock,
+documented matches, and options that still need electrical, pin, form-factor,
+or connection validation. **Create Build** copies a selected option into the
+existing BUILD workflow without reserving, consuming, or moving stock. See
+[the Alternatives guide](docs/INVERSE_ALTERNATIVE_SEARCH.md) for the workflow
+and evidence rules.
+
+## Configure the lab and KiCad
 
 You need Docker with Compose. From the repository root:
 

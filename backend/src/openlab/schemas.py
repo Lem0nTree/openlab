@@ -387,6 +387,11 @@ class KnowledgeSearchResult(BaseModel):
     locations: list[str] = Field(default_factory=list)
 
 
+class AlternativeSearchRequest(StrictInput):
+    target_name: str = Field(min_length=1, max_length=300)
+    intended_use: str | None = Field(default=None, max_length=2000)
+
+
 class InterfaceInput(StrictInput):
     kind: str = Field(min_length=1, max_length=100)
     details: dict[str, object] = Field(default_factory=dict)
@@ -401,6 +406,7 @@ class JobOut(APIModel):
     id: str
     kind: str
     status: str
+    payload: dict[str, object]
     result: dict[str, object] | None
     attempts: int
     last_error: str | None

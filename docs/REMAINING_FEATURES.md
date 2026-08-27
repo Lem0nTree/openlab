@@ -30,6 +30,8 @@ the first bounded BUILD and schematic proposal flows.
 - A general “What can I build?” explorer; the implemented flow starts from a
   specific project goal and returns bounded owned-item combinations plus a
   `Component required` list.
+- Richer inverse-search compatibility evidence beyond the implemented Alternatives
+  workspace, including broader reviewed electrical, pin, and physical-fit records.
 
 ## MVP 3 — Structured hardware knowledge
 

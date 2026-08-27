@@ -6,6 +6,7 @@ from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import or_, select
 
+from .alternatives import plan_alternatives
 from .db import SessionLocal
 from .enrichment import enrich_thing
 from .intelligence import (
@@ -72,6 +73,16 @@ def run_job(job_id: str) -> None:
                     str(job.payload.get("project_id", "")),
                     job.lab_id,
                     str(job.payload["goal"]) if job.payload.get("goal") else None,
+                )
+                complete_job(job, result, temporary=True)
+            elif job.kind == "inventory.inverse_search":
+                result = plan_alternatives(
+                    db,
+                    job.lab_id,
+                    str(job.payload.get("target_name", "")),
+                    str(job.payload["intended_use"])
+                    if job.payload.get("intended_use")
+                    else None,
                 )
                 complete_job(job, result, temporary=True)
             elif job.kind == "project.schematic":

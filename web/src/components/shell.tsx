@@ -10,6 +10,7 @@ const navItems: { href: string; label: string; icon: LabIconName }[] = [
   { href: "/", label: "Today", icon: "grid" },
   { href: "/inbox", label: "Capture", icon: "inbox" },
   { href: "/projects", label: "Builds", icon: "folder" },
+  { href: "/alternatives", label: "Alternatives", icon: "repeat" },
   { href: "/inventory", label: "Things", icon: "box" },
   { href: "/locations", label: "Locations", icon: "pin" },
 ];

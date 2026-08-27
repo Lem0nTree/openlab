@@ -34,6 +34,22 @@ Accepting a solution writes planner-owned requirements and the chosen design to 
 does not reserve, consume, or move inventory. Physical allocation remains a separate explicit
 action. Manual requirements are never overwritten by the planner.
 
+## Inverse alternative search
+
+The Alternatives workspace starts with the name of one component or board and an optional intended
+use. OpenLab resolves reviewed inventory or curated local knowledge first. If no exact local record
+exists, it can ask the configured OpenAI-compatible model to describe at most four functional roles;
+it never performs live web research. The result records whether inference stayed local or used the
+configured external endpoint.
+
+Only unarchived, unreserved stock is considered. OpenLab checks single-item replacements before
+bounded multi-piece combinations and returns at most three options. Results distinguish documented
+matches, candidates needing electrical/pin/form-factor validation, and insufficient evidence. A
+functional match is never presented as drop-in compatibility. Results expire after 24 hours and do
+not reserve or consume stock. An explicit **Create Build for validation** action copies a selected
+solution into the existing BUILD workflow, where enrichment, wiring review, and allocation remain
+separate user decisions.
+
 ## Pinouts and schematics
 
 Pin records carry their source reference and verification state. Schematic generation uses only

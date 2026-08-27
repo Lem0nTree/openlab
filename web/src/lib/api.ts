@@ -26,7 +26,7 @@ export type Project = { id: string; name: string; description: string | null; st
 export type Requirement = { id: string; name: string; quantity: string; priority: string; constraints: Record<string, unknown>; source: string; role_key: string | null; selected_thing_id: string | null; match_status: string | null };
 export type Allocation = { id: string; thing_id: string; location_id: string | null; quantity: string; state: string };
 export type ProjectDetail = Project & { requirements: Requirement[]; allocations: Allocation[]; design_json: Record<string, unknown> };
-export type Job = { id: string; kind: string; status: string; result: Record<string, unknown> | null; attempts: number; last_error: string | null; expires_at: string | null };
+export type Job = { id: string; kind: string; status: string; payload: Record<string, unknown>; result: Record<string, unknown> | null; attempts: number; last_error: string | null; expires_at: string | null };
 export type Pin = { id: string; name: string; role: string; number: string | null; electrical_type: string; alternate_functions: string[]; restrictions: string | null; details: Record<string, unknown>; source_ref: string | null; verification_state: string };
 
 function csrfToken(): string | undefined {
