@@ -1,5 +1,8 @@
+import re
+import subprocess
 from decimal import Decimal
 from io import BytesIO
+from pathlib import Path
 
 import pytest
 from fastapi import HTTPException
@@ -17,10 +20,17 @@ from openlab.intelligence import (
     _valid_vector,
 )
 from openlab.main import app, confirm_candidate_identity, update_candidate_proposal
-from openlab.models import InboxCandidate, Thing
+from openlab.models import InboxCandidate, Project, Thing
 from openlab.providers import OpenAICompatibleProvider, ProviderError
 from openlab.schemas import InboxCandidateConfirm, InboxCandidateInput, InboxCandidatePatch
-from openlab.schematics import WiringProposal, export_kicad_schematic
+from openlab.schematics import (
+    WiringProposal,
+    accept_schematic,
+    export_kicad_schematic,
+    export_kicad_symbol_library,
+    parse_kicad_erc_report,
+    run_kicad_erc,
+)
 from openlab.services import canonical_profile, extract_pdf_text
 
 
@@ -330,3 +340,106 @@ def test_kicad_export_is_a_deterministic_sourced_wiring_document() -> None:
     assert "(pin input line" in first
     assert "(wire (pts" in first
     assert first.count("(") == first.count(")")
+
+
+def test_kicad_export_splits_multi_endpoint_net_into_two_point_wires() -> None:
+    design = {
+        "project_id": "project-1",
+        "summary": "Connect shared ground",
+        "components": [
+            {
+                "role_key": role_key,
+                "name": role_key,
+                "pins": [
+                    {
+                        "id": f"{role_key}-gnd",
+                        "name": "GND",
+                        "number": "GND",
+                        "electrical_type": "ground",
+                    }
+                ],
+            }
+            for role_key in ("controller", "sensor", "indicator")
+        ],
+        "nets": [
+            {
+                "name": "GND",
+                "endpoints": [
+                    {"role_key": role_key, "pin_id": f"{role_key}-gnd"}
+                    for role_key in ("controller", "sensor", "indicator")
+                ],
+            }
+        ],
+    }
+
+    schematic = export_kicad_schematic(design)
+    wires = re.findall(r"\(wire \(pts ([^\n]+)\)", schematic)
+
+    assert schematic.count("(wire (pts") == 2
+    assert schematic.count("(xy 30.48 35.56) (xy 66.04 35.56)") == 1
+    assert schematic.count("(xy 66.04 35.56) (xy 101.6 35.56)") == 1
+    assert all(wire.count("(xy ") == 2 for wire in wires)
+    assert "(pin passive line" in schematic
+
+    library = export_kicad_symbol_library(design)
+    assert library.startswith("(kicad_symbol_lib")
+    assert '(symbol "OLPin1"' in library
+    assert "OpenLab:OLPin1" not in library
+    assert library.count("(") == library.count(")")
+
+
+def test_kicad_report_is_parsed_and_errors_block_acceptance() -> None:
+    report = """{
+      "sheets": [{"violations": [
+        {"severity": "error", "type": "power_pin_not_driven",
+         "description": "Input Power pin not driven by any Output Power pins",
+         "items": [{"description": "Symbol P5 Pin GND", "pos": {"x": 30.48, "y": 35.56}}]},
+        {"severity": "warning", "type": "endpoint_off_grid",
+         "description": "Symbol pin or wire end off connection grid", "items": []}
+      ]}]
+    }"""
+
+    findings = parse_kicad_erc_report(report)
+
+    assert [finding["severity"] for finding in findings] == ["error", "warning"]
+    assert findings[0]["items"] == [
+        {"description": "Symbol P5 Pin GND", "position": {"x": 30.48, "y": 35.56}}
+    ]
+
+    project = Project(id="project-1", lab_id="lab-1", name="Plant monitor", revision=1)
+    with pytest.raises(ValueError, match="Resolve KiCad ERC errors"):
+        accept_schematic(
+            project,
+            {"status": "valid", "erc": {"status": "violations", "report": report}},
+            "job-1",
+            1,
+        )
+
+
+def test_kicad_erc_reports_load_failure_as_failed(monkeypatch: pytest.MonkeyPatch) -> None:
+    call: dict[str, object] = {}
+
+    def failed_run(*args: object, **kwargs: object) -> subprocess.CompletedProcess[str]:
+        call.update(kwargs)
+        call["project_exists"] = (Path(str(kwargs["cwd"])) / "openlab.kicad_pro").exists()
+        return subprocess.CompletedProcess(
+            args=["kicad-cli"], returncode=3, stdout="", stderr="Failed to load schematic\n"
+        )
+
+    monkeypatch.setattr(
+        "openlab.schematics.subprocess.run",
+        failed_run,
+    )
+
+    result = run_kicad_erc({"project_id": "project-1"}, "kicad-cli")
+
+    assert result["status"] == "failed"
+    assert result["exit_code"] == 3
+    assert result["report"] is None
+    assert Path(str(call["cwd"])).name.startswith("openlab-erc-")
+    assert call["project_exists"] is True
+
+    project = Project(id="project-1", lab_id="lab-1", name="Plant monitor", revision=1)
+    with pytest.raises(ValueError, match="must complete successfully"):
+        accept_schematic(project, {"status": "valid", "erc": result}, "job-1", 1)
+    assert result["reason"] == "Failed to load schematic"

@@ -80,9 +80,7 @@ def run_job(job_id: str) -> None:
                     db,
                     job.lab_id,
                     str(job.payload.get("target_name", "")),
-                    str(job.payload["intended_use"])
-                    if job.payload.get("intended_use")
-                    else None,
+                    str(job.payload["intended_use"]) if job.payload.get("intended_use") else None,
                 )
                 complete_job(job, result, temporary=True)
             elif job.kind == "project.schematic":
@@ -91,6 +89,7 @@ def run_job(job_id: str) -> None:
                     str(job.payload.get("project_id", "")),
                     job.lab_id,
                     str(job.payload["notes"]) if job.payload.get("notes") else None,
+                    str(job.payload["repair_job_id"]) if job.payload.get("repair_job_id") else None,
                 )
                 complete_job(job, result, temporary=True)
             elif job.kind == "system.kicad_check":

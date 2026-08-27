@@ -464,6 +464,7 @@ class PinoutReplace(StrictInput):
 
 class SchematicRequest(StrictInput):
     notes: str | None = Field(default=None, max_length=2000)
+    repair_job_id: str | None = Field(default=None, max_length=36)
 
 
 class SchematicAccept(StrictInput):
