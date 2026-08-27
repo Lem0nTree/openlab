@@ -8,6 +8,7 @@ import re
 import subprocess
 import tempfile
 import uuid
+from itertools import pairwise
 from pathlib import Path
 from typing import Literal
 
@@ -16,7 +17,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from .config import get_settings
-from .models import Lab, Pin, Project, Requirement, Thing, ThingInterface
+from .models import Job, Lab, Pin, Project, Requirement, Thing, ThingInterface
 from .providers import ProviderError
 from .services import active_provider
 from .system_settings import effective_kicad_cli
@@ -164,10 +165,22 @@ def _ai_wiring(
     components: list[dict[str, object]],
     pins_by_id: dict[str, Pin],
     notes: str | None,
+    repair: tuple[WiringProposal, list[dict[str, object]]] | None = None,
 ) -> WiringProposal:
     provider, _ = active_provider(db, project.lab_id)
+    fallback = repair[0] if repair else _deterministic_wiring(components, pins_by_id)
     if not provider:
-        return _deterministic_wiring(components, pins_by_id)
+        return fallback
+    repair_instruction = ""
+    if repair:
+        previous, findings = repair
+        repair_instruction = (
+            " This is a repair of an existing proposal. Preserve its safe connections unless an "
+            "electrical finding requires a change. OpenLab fixes endpoint_off_grid and "
+            "lib_symbol_issues in the KiCad exporter; do not change wiring for those types. "
+            "Previous proposal and KiCad findings: "
+            f"{json.dumps({'proposal': previous.model_dump(), 'findings': findings}, separators=(',', ':'), default=str)}."
+        )
     prompt = (
         "Propose a conservative wiring plan using only the supplied role_key and pin id values. "
         "Return exactly {summary,nets,required_support}; each net has name and at least two endpoints, "
@@ -175,6 +188,7 @@ def _ai_wiring(
         "Do not connect a pin more than once. If sourced information is insufficient, leave the net "
         "out and state a generic missing supporting component or unresolved need. Components and pins: "
         f"{json.dumps(components, separators=(',', ':'), default=str)}. Notes: {notes or '[none]'}"
+        f"{repair_instruction}"
     )
     try:
         return WiringProposal.model_validate(
@@ -192,7 +206,7 @@ def _ai_wiring(
                 )
             )
         except (ProviderError, ValidationError, ValueError):
-            return _deterministic_wiring(components, pins_by_id)
+            return fallback
 
 
 def _number(value: object) -> float | None:
@@ -341,7 +355,11 @@ def validate_wiring(
 
 
 def propose_schematic(
-    db: Session, project_id: str, lab_id: str, notes: str | None = None
+    db: Session,
+    project_id: str,
+    lab_id: str,
+    notes: str | None = None,
+    repair_job_id: str | None = None,
 ) -> dict[str, object]:
     project = db.scalar(select(Project).where(Project.id == project_id, Project.lab_id == lab_id))
     if not project:
@@ -370,7 +388,48 @@ def propose_schematic(
             },
             "erc": {"status": "not_run", "reason": "internal_validation_blocked"},
         }
-    proposal = _ai_wiring(db, project, components, pins_by_id, notes)
+    repair: tuple[WiringProposal, list[dict[str, object]]] | None = None
+    if repair_job_id:
+        source_job = db.scalar(
+            select(Job).where(
+                Job.id == repair_job_id,
+                Job.lab_id == lab_id,
+                Job.kind == "project.schematic",
+            )
+        )
+        if (
+            not source_job
+            or source_job.status != "completed"
+            or not source_job.result
+            or str(source_job.payload.get("project_id", "")) != project.id
+        ):
+            raise ProviderError(
+                "The KiCad repair source is unavailable or does not match this build"
+            )
+        source_validation = source_job.result.get("validation")
+        required_support = (
+            source_validation.get("required_support", [])
+            if isinstance(source_validation, dict)
+            else []
+        )
+        try:
+            previous = WiringProposal.model_validate(
+                {
+                    "summary": source_job.result.get("summary"),
+                    "nets": source_job.result.get("nets", []),
+                    "required_support": required_support,
+                }
+            )
+        except ValidationError as exc:
+            raise ProviderError("The previous wiring proposal cannot be repaired") from exc
+        source_erc = source_job.result.get("erc")
+        findings = (
+            parse_kicad_erc_report(str(source_erc.get("report", "")))
+            if isinstance(source_erc, dict)
+            else []
+        )
+        repair = (previous, findings)
+    proposal = _ai_wiring(db, project, components, pins_by_id, notes, repair)
     validation = validate_wiring(db, project, proposal, components, pins_by_id)
     result: dict[str, object] = {
         "project_id": project.id,
@@ -395,18 +454,14 @@ def _escape(value: object) -> str:
     return str(value).replace("\\", "\\\\").replace('"', '\\"').replace("\n", " ")
 
 
-def export_kicad_schematic(design: dict[str, object]) -> str:
-    """Export actual KiCad nets using generic one-pin symbols for each sourced endpoint."""
-    root_uuid = uuid.uuid5(uuid.NAMESPACE_URL, f"openlab:{design.get('project_id', 'project')}")
+def _kicad_endpoint_rows(design: dict[str, object]) -> list[dict[str, object]]:
     pin_catalog: dict[str, dict[str, object]] = {}
-    role_names: dict[str, str] = {}
     components = design.get("components", [])
     if isinstance(components, list):
         for component in components:
             if not isinstance(component, dict):
                 continue
             role_key = str(component.get("role_key", "component"))
-            role_names[role_key] = str(component.get("name", role_key))
             pins = component.get("pins", [])
             if isinstance(pins, list):
                 for pin in pins:
@@ -439,7 +494,12 @@ def export_kicad_schematic(design: dict[str, object]) -> str:
                         "electrical_type": str(pin.get("electrical_type", "passive")),
                     }
                 )
+    return endpoint_rows
 
+
+def _kicad_symbol_definition(
+    endpoint: dict[str, object], index: int, *, library_qualified: bool, indent: str
+) -> list[str]:
     electrical_types = {
         "power_in": "power_in",
         "power_out": "power_out",
@@ -449,8 +509,53 @@ def export_kicad_schematic(design: dict[str, object]) -> str:
         "open_drain": "open_collector",
         "passive": "passive",
         "no_connect": "no_connect",
-        "ground": "power_in",
+        # Ground continuity is already checked deterministically. Treating every generated
+        # ground endpoint as a KiCad power input creates a false "not driven" error unless
+        # the documentation-only schematic also invents a PWR_FLAG source.
+        "ground": "passive",
     }
+    symbol_name = f"OLPin{index + 1}"
+    library_id = f"OpenLab:{symbol_name}" if library_qualified else symbol_name
+    pin_type = electrical_types.get(str(endpoint["electrical_type"]), "passive")
+    value = f"{endpoint['role_key']}.{endpoint['pin_name']}"
+    return [
+        f'{indent}(symbol "{library_id}" (pin_names (offset 0.762)) (in_bom yes) (on_board no)',
+        f'{indent}  (property "Reference" "P" (id 0) (at 0 6.858 0) (effects (font (size 1.27 1.27))))',
+        f'{indent}  (property "Value" "{_escape(value)}" (id 1) (at 0 5.08 0) (effects (font (size 1.27 1.27))))',
+        f'{indent}  (property "Footprint" "" (id 2) (at 5.08 0 0) (effects (font (size 1.27 1.27)) hide))',
+        f'{indent}  (property "Datasheet" "" (id 3) (at 5.08 0 0) (effects (font (size 1.27 1.27)) hide))',
+        f'{indent}  (symbol "{symbol_name}_0_1" (circle (center 0 3.302) (radius 0.762) (stroke (width 0)) (fill (type none))))',
+        f'{indent}  (symbol "{symbol_name}_1_1" (pin {pin_type} line (at 0 0 90) (length 2.54)',
+        f'{indent}    (name "{_escape(endpoint["pin_name"])}" (effects (font (size 1.27 1.27))))',
+        f'{indent}    (number "{_escape(endpoint["pin_number"])}" (effects (font (size 1.27 1.27))))',
+        f"{indent}  ))",
+        f"{indent})",
+    ]
+
+
+def export_kicad_symbol_library(design: dict[str, object]) -> str:
+    """Export the generated endpoint symbols for project-local ERC resolution."""
+    lines = ["(kicad_symbol_lib (version 20210619) (generator openlab)"]
+    for index, endpoint in enumerate(_kicad_endpoint_rows(design)):
+        lines.extend(
+            _kicad_symbol_definition(endpoint, index, library_qualified=False, indent="  ")
+        )
+    lines.append(")")
+    return "\n".join(lines) + "\n"
+
+
+def export_kicad_schematic(design: dict[str, object]) -> str:
+    """Export actual KiCad nets using generic one-pin symbols for each sourced endpoint."""
+    root_uuid = uuid.uuid5(uuid.NAMESPACE_URL, f"openlab:{design.get('project_id', 'project')}")
+    role_names: dict[str, str] = {}
+    components = design.get("components", [])
+    if isinstance(components, list):
+        for component in components:
+            if isinstance(component, dict):
+                role_key = str(component.get("role_key", "component"))
+                role_names[role_key] = str(component.get("name", role_key))
+    endpoint_rows = _kicad_endpoint_rows(design)
+
     lines = [
         "(kicad_sch (version 20210621) (generator openlab)",
         f"  (uuid {root_uuid})",
@@ -459,23 +564,8 @@ def export_kicad_schematic(design: dict[str, object]) -> str:
     ]
 
     for index, endpoint in enumerate(endpoint_rows):
-        symbol_name = f"OLPin{index + 1}"
-        pin_type = electrical_types.get(str(endpoint["electrical_type"]), "passive")
-        value = f"{endpoint['role_key']}.{endpoint['pin_name']}"
         lines.extend(
-            [
-                f'    (symbol "OpenLab:{symbol_name}" (pin_names (offset 0.762)) (in_bom yes) (on_board no)',
-                '      (property "Reference" "P" (id 0) (at 0 6.858 0) (effects (font (size 1.27 1.27))))',
-                f'      (property "Value" "{_escape(value)}" (id 1) (at 0 5.08 0) (effects (font (size 1.27 1.27))))',
-                '      (property "Footprint" "" (id 2) (at 5.08 0 0) (effects (font (size 1.27 1.27)) hide))',
-                '      (property "Datasheet" "" (id 3) (at 5.08 0 0) (effects (font (size 1.27 1.27)) hide))',
-                f'      (symbol "{symbol_name}_0_1" (circle (center 0 3.302) (radius 0.762) (stroke (width 0)) (fill (type none))))',
-                f'      (symbol "{symbol_name}_1_1" (pin {pin_type} line (at 0 0 90) (length 2.54)',
-                f'        (name "{_escape(endpoint["pin_name"])}" (effects (font (size 1.27 1.27))))',
-                f'        (number "{_escape(endpoint["pin_number"])}" (effects (font (size 1.27 1.27))))',
-                "      ))",
-                "    )",
-            ]
+            _kicad_symbol_definition(endpoint, index, library_qualified=True, indent="    ")
         )
     lines.append("  )")
 
@@ -484,11 +574,13 @@ def export_kicad_schematic(design: dict[str, object]) -> str:
     for endpoint in endpoint_rows:
         by_net.setdefault(int(str(endpoint["net_index"])), []).append(endpoint)
     for net_index, endpoints in by_net.items():
-        y = 35 + net_index * 18
+        # KiCad's default connection grid is 2.54 mm. Keeping every pin and wire endpoint
+        # on that grid prevents exporter geometry from being reported as an ERC warning.
+        y = round(35.56 + net_index * 17.78, 2)
         coordinates: list[tuple[float, float]] = []
         for endpoint_index, endpoint in enumerate(endpoints):
             overall_index = endpoint_rows.index(endpoint)
-            x = 30 + endpoint_index * 35
+            x = round(30.48 + endpoint_index * 35.56, 2)
             coordinates.append((x, y))
             symbol_name = f"OLPin{overall_index + 1}"
             symbol_uuid = uuid.uuid5(root_uuid, f"symbol:{overall_index}:{endpoint['pin_id']}")
@@ -510,16 +602,18 @@ def export_kicad_schematic(design: dict[str, object]) -> str:
             )
             instance_rows.append((str(symbol_uuid), reference, value, ""))
         if len(coordinates) >= 2:
-            points = " ".join(f"(xy {x} {y})" for x, y in coordinates)
-            wire_uuid = uuid.uuid5(root_uuid, f"wire:{net_index}:{endpoint['net_name']}")
-            lines.extend(
-                [
-                    f"  (wire (pts {points})",
-                    "    (stroke (width 0) (type solid) (color 0 0 0 0))",
-                    f"    (uuid {wire_uuid})",
-                    "  )",
-                ]
-            )
+            net_name = str(endpoints[0]["net_name"])
+            for segment_index, (start, end) in enumerate(pairwise(coordinates)):
+                points = f"(xy {start[0]} {start[1]}) (xy {end[0]} {end[1]})"
+                wire_uuid = uuid.uuid5(root_uuid, f"wire:{net_index}:{net_name}:{segment_index}")
+                lines.extend(
+                    [
+                        f"  (wire (pts {points})",
+                        "    (stroke (width 0) (type solid) (color 0 0 0 0))",
+                        f"    (uuid {wire_uuid})",
+                        "  )",
+                    ]
+                )
             label_uuid = uuid.uuid5(root_uuid, f"label:{net_index}:{endpoint['net_name']}")
             first_x, first_y = coordinates[0]
             lines.extend(
@@ -563,6 +657,76 @@ def export_kicad_schematic(design: dict[str, object]) -> str:
     return "\n".join(lines) + "\n"
 
 
+def parse_kicad_erc_report(report: str | None) -> list[dict[str, object]]:
+    """Return stable, UI-safe findings from KiCad's versioned JSON report."""
+    if not report:
+        return []
+    try:
+        parsed: object = json.loads(report)
+    except (json.JSONDecodeError, TypeError):
+        return []
+    if not isinstance(parsed, dict):
+        return []
+    sheets = parsed.get("sheets")
+    if not isinstance(sheets, list):
+        return []
+    findings: list[dict[str, object]] = []
+    for sheet in sheets:
+        if not isinstance(sheet, dict):
+            continue
+        violations = sheet.get("violations")
+        if not isinstance(violations, list):
+            continue
+        for violation in violations:
+            if not isinstance(violation, dict):
+                continue
+            items: list[dict[str, object]] = []
+            violation_items = violation.get("items")
+            if isinstance(violation_items, list):
+                for item in violation_items:
+                    if not isinstance(item, dict):
+                        continue
+                    safe_item: dict[str, object] = {
+                        "description": str(item.get("description", "Affected schematic item"))[
+                            :1000
+                        ]
+                    }
+                    position = item.get("pos")
+                    if isinstance(position, dict):
+                        safe_item["position"] = {
+                            "x": position.get("x"),
+                            "y": position.get("y"),
+                        }
+                    items.append(safe_item)
+            findings.append(
+                {
+                    "severity": str(violation.get("severity", "warning"))[:40],
+                    "type": str(violation.get("type", "unknown"))[:120],
+                    "description": str(violation.get("description", "KiCad ERC finding"))[:1000],
+                    "items": items[:50],
+                }
+            )
+            if len(findings) >= 500:
+                return findings
+    return findings
+
+
+def kicad_erc_error_count(design: dict[str, object]) -> int:
+    erc = design.get("erc")
+    if not isinstance(erc, dict):
+        return 0
+    findings = erc.get("findings")
+    if not isinstance(findings, list):
+        findings = parse_kicad_erc_report(
+            str(erc.get("report")) if erc.get("report") is not None else None
+        )
+    return sum(
+        1
+        for finding in findings
+        if isinstance(finding, dict) and finding.get("severity") == "error"
+    )
+
+
 def run_kicad_erc(design: dict[str, object], cli: str | None = None) -> dict[str, object]:
     cli = cli or get_settings().kicad_cli
     if not cli:
@@ -572,8 +736,18 @@ def run_kicad_erc(design: dict[str, object], cli: str | None = None) -> dict[str
         }
     with tempfile.TemporaryDirectory(prefix="openlab-erc-") as temporary:
         schematic_path = Path(temporary) / "openlab.kicad_sch"
+        project_path = Path(temporary) / "openlab.kicad_pro"
+        symbol_library_path = Path(temporary) / "openlab.kicad_sym"
+        symbol_table_path = Path(temporary) / "sym-lib-table"
         report_path = Path(temporary) / "erc.json"
         schematic_path.write_text(export_kicad_schematic(design), encoding="utf-8")
+        project_path.write_text("{}\n", encoding="utf-8")
+        symbol_library_path.write_text(export_kicad_symbol_library(design), encoding="utf-8")
+        symbol_table_path.write_text(
+            '(sym_lib_table (version 7) (lib (name "OpenLab")(type "KiCad")'
+            '(uri "${KIPRJMOD}/openlab.kicad_sym")(options "")(descr "OpenLab generated symbols")))\n',
+            encoding="utf-8",
+        )
         try:
             completed = subprocess.run(
                 [
@@ -589,17 +763,33 @@ def run_kicad_erc(design: dict[str, object], cli: str | None = None) -> dict[str
                 ],
                 capture_output=True,
                 check=False,
+                cwd=temporary,
                 text=True,
                 timeout=120,
             )
         except (OSError, subprocess.SubprocessError) as exc:
             return {"status": "failed", "reason": str(exc)[:1000]}
         report = report_path.read_text(encoding="utf-8")[:100_000] if report_path.exists() else None
+        status = (
+            "passed"
+            if completed.returncode == 0
+            else "violations"
+            if report is not None
+            else "failed"
+        )
+        findings = parse_kicad_erc_report(report)
         return {
-            "status": "passed" if completed.returncode == 0 else "violations",
+            "status": status,
             "exit_code": completed.returncode,
             "report": report,
+            "findings": findings,
+            "counts": {
+                "errors": sum(value["severity"] == "error" for value in findings),
+                "warnings": sum(value["severity"] == "warning" for value in findings),
+                "total": len(findings),
+            },
             "stderr": completed.stderr[-4000:],
+            "reason": completed.stderr.strip()[-1000:] if status == "failed" else None,
             "scope": "KiCad electrical nets plus OpenLab sourced-pin safety rules",
         }
 
@@ -611,6 +801,11 @@ def accept_schematic(
         raise ValueError("Project was updated elsewhere; reload and retry")
     if job_result.get("status") == "blocked":
         raise ValueError("Blocked schematic proposals cannot be accepted")
+    erc = job_result.get("erc")
+    if isinstance(erc, dict) and erc.get("status") == "failed":
+        raise ValueError("KiCad ERC must complete successfully before acceptance")
+    if kicad_erc_error_count(job_result):
+        raise ValueError("Resolve KiCad ERC errors before accepting this schematic")
     design = dict(project.design_json)
     design["status"] = "schematic_accepted"
     design["schematic"] = {**job_result, "source_job_id": job_id}

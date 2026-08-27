@@ -7320,6 +7320,18 @@
               }
             ],
             "title": "Notes"
+          },
+          "repair_job_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 36
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Repair Job Id"
           }
         },
         "additionalProperties": false,

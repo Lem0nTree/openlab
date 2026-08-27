@@ -1632,6 +1632,8 @@ export interface components {
         SchematicRequest: {
             /** Notes */
             notes?: string | null;
+            /** Repair Job Id */
+            repair_job_id?: string | null;
         };
         /** SettingsOverviewOut */
         SettingsOverviewOut: {

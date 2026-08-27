@@ -1980,6 +1980,26 @@ def queue_schematic(
             status_code=409,
             detail="This BUILD solution has no owned components to wire",
         )
+    if payload.repair_job_id:
+        repair_job = db.scalar(
+            select(Job).where(Job.id == payload.repair_job_id, Job.lab_id == project.lab_id)
+        )
+        if (
+            not repair_job
+            or repair_job.kind != "project.schematic"
+            or repair_job.status != "completed"
+            or not repair_job.result
+            or str(repair_job.payload.get("project_id", "")) != project.id
+        ):
+            raise HTTPException(
+                status_code=409,
+                detail="KiCad repair source is not a completed schematic for this build",
+            )
+        repair_erc = repair_job.result.get("erc")
+        if not isinstance(repair_erc, dict) or repair_erc.get("status") != "violations":
+            raise HTTPException(
+                status_code=409, detail="This schematic has no KiCad violations to fix"
+            )
     selected_thing_ids = set(
         db.scalars(
             select(Requirement.selected_thing_id).where(
@@ -1994,7 +2014,11 @@ def queue_schematic(
     job = Job(
         lab_id=project.lab_id,
         kind="project.schematic",
-        payload={"project_id": project.id, "notes": payload.notes},
+        payload={
+            "project_id": project.id,
+            "notes": payload.notes,
+            "repair_job_id": payload.repair_job_id,
+        },
     )
     db.add(job)
     db.flush()
