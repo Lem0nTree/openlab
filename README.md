@@ -73,7 +73,9 @@ cd openlab
 sh deploy/up.sh --build
 ```
 
-Open [http://localhost:3000](http://localhost:3000), copy the one-time setup token printed by `openlab-server`, and create the owner account. OpenLab generates missing secrets on first run and preserves existing values and persistent volumes across restarts.
+Open [http://localhost:3000](http://localhost:3000). You are redirected to sign in before any lab page is rendered. On a new installation, select **First time here? Set up your lab**, copy the one-time setup token printed by `openlab-server`, and create the owner account. Once configured, setup redirects to login. OpenLab generates missing secrets on first run and preserves existing values and persistent volumes across restarts.
+
+All application pages require a backend-validated session, including direct links and client navigation. Missing, expired, or invalid sessions redirect to login on the server without rendering the application shell; successful login returns to the requested local page. Session checks and page responses are not cached, and backend failures do not grant access. The web server uses `OPENLAB_API_INTERNAL_URL` (default `http://openlab-server:8000`) for these checks as well as API forwarding; local development must point it at the local backend before starting/building Next.js. API routes retain their own backend authentication and CSRF checks.
 
 To stop the stack without deleting your data:
 
