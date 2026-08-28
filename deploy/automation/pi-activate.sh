@@ -62,10 +62,23 @@ wait_for_stack() {
   [[ $(docker inspect --format '{{.Image}}' deploy-openlab-server-1) == "$expected_server_id" ]]
   [[ $(docker inspect --format '{{.Image}}' deploy-openlab-worker-1) == "$expected_server_id" ]]
   [[ $(docker inspect --format '{{.Image}}' deploy-openlab-web-1) == "$expected_web_id" ]]
-  docker logs --tail 200 deploy-openlab-worker-1 2>&1 | grep -F 'OpenLab worker started'
-  for route in / /login /setup /settings /api/v1/health /api/v1/setup; do
-    curl --fail --silent --show-error --output /dev/null "http://127.0.0.1:3000$route"
+
+  local application_ready route
+  application_ready=false
+  for _ in $(seq 1 60); do
+    if docker logs --tail 200 deploy-openlab-worker-1 2>&1 | grep -qF 'OpenLab worker started'; then
+      application_ready=true
+      for route in / /login /setup /settings /api/v1/health /api/v1/setup; do
+        if ! curl --fail --silent --output /dev/null "http://127.0.0.1:3000$route"; then
+          application_ready=false
+          break
+        fi
+      done
+    fi
+    [[ "$application_ready" == true ]] && break
+    sleep 2
   done
+  [[ "$application_ready" == true ]]
 }
 
 rollback() {
