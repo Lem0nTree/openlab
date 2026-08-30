@@ -52,6 +52,18 @@ class Lab(Base, Timestamped):
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     units: Mapped[str] = mapped_column(String(20), default="metric", nullable=False)
     kicad_cli: Mapped[str | None] = mapped_column(String(500))
+    public_url: Mapped[str | None] = mapped_column(String(600))
+    public_url_verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    onboarding_completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    integration_checks: Mapped[dict[str, object]] = mapped_column(JSONB, default=dict, nullable=False)
+
+
+class ServiceHeartbeat(Base):
+    __tablename__ = "service_heartbeats"
+    instance_id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    service: Mapped[str] = mapped_column(String(40), nullable=False, index=True)
+    version: Mapped[str] = mapped_column(String(100), nullable=False)
+    last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
 
 class User(Base, Timestamped):

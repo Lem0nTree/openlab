@@ -1,0 +1,37 @@
+.page { max-width: 1080px; margin: 0 auto; padding: 28px 24px 64px; }
+.header { display: flex; justify-content: space-between; align-items: center; padding-bottom: 42px; }
+.intro { max-width: 720px; margin-bottom: 32px; }
+.intro h1 { font-size: clamp(2rem, 5vw, 3.5rem); letter-spacing: -.04em; margin: 12px 0; }
+.intro p, .card > p, .footer { line-height: 1.65; color: var(--muted, #a8abb8); }
+.steps { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 18px; margin-bottom: 18px; }
+.steps button { display: flex; align-items: center; gap: 8px; white-space: nowrap; background: transparent; color: inherit; border: 1px solid #ffffff20; padding: 10px 13px; border-radius: 12px; }
+.steps button[aria-current] { border-color: #99e2c0; background: #99e2c016; color: #b8f5d8; }
+.steps span { display: inline-grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; background: #ffffff12; font-size: 12px; }
+.card { border: 1px solid #ffffff1c; background: #ffffff04; border-radius: 22px; padding: clamp(22px, 4vw, 44px); }
+.card h2 { font-size: 1.8rem; letter-spacing: -.03em; margin: 12px 0 20px; }
+.card h3 { margin-top: 28px; }
+.card form { margin: 24px 0; max-width: 620px; }
+.actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 22px; }
+.note { font-size: 13px; }
+.time { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.command { display: block; border: 1px solid #ffffff20; background: #00000022; border-radius: 10px; padding: 16px; overflow-x: auto; }
+.checks { list-style: none; padding: 0; margin: 28px 0; }
+.checks li { display: flex; gap: 16px; padding: 18px 0; border-top: 1px solid #ffffff16; }
+.checks h3 { font-size: 15px; margin: 0 0 6px; }
+.checks h3 small { margin-left: 8px; font-size: 11px; color: #a8abb8; font-weight: 400; }
+.checks p { font-size: 14px; line-height: 1.5; margin: 3px 0; }
+.checks small { color: #a8abb8; font-size: 11px; }
+.badge { width: 26px; height: 26px; flex: 0 0 26px; border-radius: 50%; background: #e2b65c22; color: #e2b65c; text-align: center; line-height: 26px; }
+.checks li[data-status="pass"] .badge { background: #99e2c022; color: #99e2c0; }
+.checks li[data-status="fail"] .badge { background: #ff959522; color: #ff9595; }
+.fix { color: #b9deff; }
+.error, .message { padding: 16px; border: 1px solid #ff959550; border-radius: 12px; color: #ffbcbc; line-height: 1.6; }
+.message { border-color: #99e2c050; color: #b8f5d8; }
+.footer { margin-top: 28px; font-size: 13px; }
+@media (max-width: 600px) {
+  .page { padding: 18px 14px 40px; }
+  .header { padding-bottom: 24px; }
+  .steps { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); overflow: visible; }
+  .steps button { min-width: 0; white-space: normal; text-align: left; }
+  .actions > button { width: 100%; }
+}

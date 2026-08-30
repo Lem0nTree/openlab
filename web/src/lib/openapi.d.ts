@@ -92,6 +92,93 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/readiness": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Readiness */
+        get: operations["get_readiness"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/onboarding": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Onboarding */
+        get: operations["get_onboarding"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/onboarding/complete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Complete Onboarding */
+        post: operations["complete_onboarding"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/settings/network": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Network Settings */
+        get: operations["get_network_settings"];
+        /** Save Network Settings */
+        put: operations["save_network_settings"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/settings/installation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Installation Settings */
+        get: operations["get_installation_settings"];
+        /** Save Installation Settings */
+        put: operations["save_installation_settings"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/settings/lab": {
         parameters: {
             query?: never;
@@ -1243,6 +1330,69 @@ export interface components {
              */
             created_at: string;
         };
+        /** InstallationOverview */
+        InstallationOverview: {
+            /** Managed */
+            managed: boolean;
+            policy: components["schemas"]["InstallationPolicy"];
+            status: components["schemas"]["InstallerStatus"] | null;
+            /** Status Stale */
+            status_stale: boolean;
+        };
+        /** InstallationPolicy */
+        InstallationPolicy: {
+            /**
+             * Security Updates
+             * @default true
+             */
+            security_updates: boolean;
+            /**
+             * Weekday
+             * @description Sunday=0; host local time
+             * @default 0
+             */
+            weekday: number;
+            /**
+             * Hour
+             * @default 3
+             */
+            hour: number;
+            /**
+             * Minute
+             * @default 0
+             */
+            minute: number;
+        };
+        /** InstallerStatus */
+        InstallerStatus: {
+            /**
+             * Schema Version
+             * @default 1
+             * @constant
+             */
+            schema_version: 1;
+            /**
+             * Checked At
+             * Format: date-time
+             */
+            checked_at: string;
+            /** Version */
+            version: string;
+            /** Checks */
+            checks: components["schemas"]["ReadinessCheck"][];
+            /**
+             * Tailscale
+             * @default not_installed
+             * @enum {string}
+             */
+            tailscale: "not_installed" | "needs_authorization" | "connected" | "unavailable";
+            /**
+             * Update Status
+             * @default idle
+             * @enum {string}
+             */
+            update_status: "idle" | "current" | "available" | "updating" | "updated" | "rolled_back" | "failed" | "manual_required";
+        };
         /** InterfaceInput */
         InterfaceInput: {
             /** Kind */
@@ -1391,6 +1541,30 @@ export interface components {
             email: string;
             /** Password */
             password: string;
+        };
+        /** NetworkInput */
+        NetworkInput: {
+            /** Public Url */
+            public_url: string;
+        };
+        /** NetworkOut */
+        NetworkOut: {
+            /** Public Url */
+            public_url: string | null;
+            /**
+             * Source
+             * @enum {string}
+             */
+            source: "settings" | "environment" | "unset";
+            /** Verified */
+            verified: boolean;
+        };
+        /** OnboardingOut */
+        OnboardingOut: {
+            /** Completed At */
+            completed_at: string | null;
+            network: components["schemas"]["NetworkOut"];
+            readiness: components["schemas"]["ReadinessReport"];
         };
         /** PinInput */
         PinInput: {
@@ -1580,6 +1754,43 @@ export interface components {
              * @enum {string}
              */
             egress: "local" | "external";
+        };
+        /** ReadinessCheck */
+        ReadinessCheck: {
+            /** Id */
+            id: string;
+            /** Label */
+            label: string;
+            /** Required */
+            required: boolean;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "pending" | "pass" | "warn" | "fail";
+            /** Code */
+            code: string;
+            /** Summary */
+            summary: string;
+            /** Remediation */
+            remediation?: string | null;
+        };
+        /** ReadinessReport */
+        ReadinessReport: {
+            /**
+             * Overall
+             * @enum {string}
+             */
+            overall: "ready" | "ready_with_warnings" | "blocked";
+            /** Version */
+            version: string;
+            /**
+             * Checked At
+             * Format: date-time
+             */
+            checked_at: string;
+            /** Checks */
+            checks: components["schemas"]["ReadinessCheck"][];
         };
         /** RequirementCreate */
         RequirementCreate: {
@@ -2067,6 +2278,240 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SettingsOverviewOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_readiness: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                openlab_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReadinessReport"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_onboarding: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                openlab_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OnboardingOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    complete_onboarding: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                openlab_csrf?: string | null;
+                openlab_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OnboardingOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_network_settings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                openlab_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NetworkOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    save_network_settings: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                openlab_csrf?: string | null;
+                openlab_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NetworkInput"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NetworkOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_installation_settings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                openlab_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InstallationOverview"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    save_installation_settings: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                openlab_csrf?: string | null;
+                openlab_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InstallationPolicy"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InstallationOverview"];
                 };
             };
             /** @description Validation Error */

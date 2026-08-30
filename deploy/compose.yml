@@ -1,6 +1,6 @@
 services:
   postgres:
-    image: pgvector/pgvector:pg17
+    image: ${OPENLAB_POSTGRES_IMAGE:-pgvector/pgvector:pg17}
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-openlab}
       POSTGRES_USER: ${POSTGRES_USER:-openlab}
@@ -28,6 +28,10 @@ services:
       OPENLAB_SETUP_TOKEN: ${OPENLAB_SETUP_TOKEN:-}
       OPENLAB_PUBLIC_URL: ${OPENLAB_PUBLIC_URL:-}
       OPENLAB_KICAD_CLI: ${OPENLAB_KICAD_CLI:-}
+      OPENLAB_VERSION: ${OPENLAB_VERSION:-development}
+      OPENLAB_INSTALLER_CONTROL_DIR: ${OPENLAB_INSTALLER_CONTROL_DIR:-}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - openlab-data:/var/lib/openlab
     depends_on:
@@ -52,6 +56,9 @@ services:
       OPENLAB_SECRET_KEY: ${OPENLAB_SECRET_KEY:?set OPENLAB_SECRET_KEY}
       OPENLAB_ENCRYPTION_KEY: ${OPENLAB_ENCRYPTION_KEY:-}
       OPENLAB_KICAD_CLI: ${OPENLAB_KICAD_CLI:-}
+      OPENLAB_VERSION: ${OPENLAB_VERSION:-development}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - openlab-data:/var/lib/openlab
     depends_on:
@@ -72,7 +79,7 @@ services:
       openlab-server:
         condition: service_healthy
     ports:
-      - "3000:3000"
+      - "${OPENLAB_BIND_ADDRESS:-0.0.0.0}:${OPENLAB_PORT:-3000}:3000"
     restart: unless-stopped
 
 volumes:

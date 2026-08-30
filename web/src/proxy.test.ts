@@ -25,7 +25,7 @@ afterEach(() => {
 });
 
 describe("server-side page access", () => {
-  it.each(["/", "/inbox", "/projects", "/projects/build-1", "/alternatives", "/inventory", "/inventory/thing-1", "/locations", "/locations/location-1", "/settings", "/future-page", "/private.json"])("redirects anonymous requests for %s before rendering", async (path) => {
+  it.each(["/", "/onboarding", "/inbox", "/projects", "/projects/build-1", "/alternatives", "/inventory", "/inventory/thing-1", "/locations", "/locations/location-1", "/settings", "/future-page", "/private.json"])("redirects anonymous requests for %s before rendering", async (path) => {
     expect(unstable_doesProxyMatch({ config, url: `${origin}${path}` })).toBe(true);
     const response = await proxy(request(path));
     expect(response.status).toBe(307);

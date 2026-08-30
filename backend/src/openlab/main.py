@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 from hashlib import sha256
 from http import HTTPStatus
 from io import BytesIO
-from secrets import token_urlsafe
+from secrets import compare_digest, token_urlsafe
 from urllib.parse import urlencode
 
 import qrcode  # type: ignore[import-untyped]
@@ -15,13 +15,27 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from fastapi.responses import Response as FastAPIResponse
 from qrcode.image.svg import SvgPathImage  # type: ignore[import-untyped]
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, or_, select, text
 from sqlalchemy.orm import Session, aliased
 
 from .alternatives import create_build_from_alternative
 from .config import get_settings
 from .db import get_db
 from .enrichment import enrich_thing, queue_thing_enrichment
+from .installation import (
+    InstallationOverview,
+    InstallationPolicy,
+    NetworkInput,
+    NetworkOut,
+    OnboardingOut,
+    ReadinessReport,
+    application_readiness,
+    installation_overview,
+    network_out,
+    normalize_public_url,
+    provider_fingerprint,
+    save_installation_policy,
+)
 from .intelligence import accept_build_plan, queue_thing_embedding, search_inventory
 from .models import (
     Allocation,
@@ -156,7 +170,10 @@ async def http_exception_handler(_: Request, exc: HTTPException) -> JSONResponse
 
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(_: Request, exc: RequestValidationError) -> JSONResponse:
-    return problem(422, "Validation failed", str(exc.errors()))
+    # Pydantic's default errors include raw request inputs (passwords/API keys).
+    errors = [{"loc": error["loc"], "msg": error["msg"], "type": error["type"]}
+              for error in exc.errors()]
+    return problem(422, "Validation failed", str(errors))
 
 
 def require_idempotency(value: str | None = Header(default=None, alias="Idempotency-Key")) -> str:
@@ -287,10 +304,12 @@ def setup_status(db: Session = Depends(get_db)) -> dict[str, bool]:
 
 
 @app.post("/api/v1/setup", response_model=LabOut, status_code=201)
-def setup(payload: SetupRequest, db: Session = Depends(get_db)) -> Lab:
+def setup(payload: SetupRequest, response: Response, db: Session = Depends(get_db)) -> Lab:
+    # Serialize competing first-owner requests across processes, not only within Uvicorn.
+    db.execute(text("SELECT pg_advisory_xact_lock(762104913)"))
     if db.scalar(select(func.count(User.id))) != 0:
         raise HTTPException(status_code=409, detail="OpenLab is already configured")
-    if payload.token != bootstrap_token:
+    if not compare_digest(payload.token.encode(), bootstrap_token.encode()):
         raise HTTPException(status_code=403, detail="Invalid setup token")
     lab = Lab(name=payload.lab_name)
     owner = User(
@@ -302,8 +321,20 @@ def setup(payload: SetupRequest, db: Session = Depends(get_db)) -> Lab:
     db.add_all([lab, owner])
     db.flush()
     db.add(Membership(lab_id=lab.id, user_id=owner.id, role="owner"))
+    raw, csrf = create_session(db, owner)
     db.commit()
+    set_session_cookies(response, raw, csrf)
     return lab
+
+
+def set_session_cookies(response: Response, raw: str, csrf: str) -> None:
+    response.headers["Cache-Control"] = "private, no-store"
+    response.set_cookie(
+        "openlab_session", raw, httponly=True, samesite="lax", max_age=settings.session_hours * 3600
+    )
+    response.set_cookie(
+        "openlab_csrf", csrf, httponly=False, samesite="lax", max_age=settings.session_hours * 3600
+    )
 
 
 @app.post("/api/v1/session", response_model=UserOut)
@@ -317,12 +348,7 @@ def login(payload: LoginRequest, response: Response, db: Session = Depends(get_d
         raise HTTPException(status_code=401, detail="Invalid email or password")
     raw, csrf = create_session(db, user)
     db.commit()
-    response.set_cookie(
-        "openlab_session", raw, httponly=True, samesite="lax", max_age=settings.session_hours * 3600
-    )
-    response.set_cookie(
-        "openlab_csrf", csrf, httponly=False, samesite="lax", max_age=settings.session_hours * 3600
-    )
+    set_session_cookies(response, raw, csrf)
     return user
 
 
@@ -359,6 +385,89 @@ def get_settings_overview(
     if value is None:
         raise HTTPException(status_code=404, detail="Lab not found")
     return settings_overview_out(db, value)
+
+
+def owner_lab(db: Session, user: User) -> Lab:
+    value = db.get(Lab, lab_for_user(db, user))
+    if value is None:
+        raise HTTPException(status_code=404, detail="Lab not found")
+    return value
+
+
+@app.get("/api/v1/readiness", response_model=ReadinessReport, operation_id="get_readiness")
+def get_readiness(response: Response, user: User = Depends(require_owner),
+                  db: Session = Depends(get_db)) -> ReadinessReport:
+    response.headers["Cache-Control"] = "private, no-store"
+    return application_readiness(db, owner_lab(db, user), settings)
+
+
+@app.get("/api/v1/onboarding", response_model=OnboardingOut, operation_id="get_onboarding")
+def get_onboarding(response: Response, user: User = Depends(require_owner),
+                   db: Session = Depends(get_db)) -> OnboardingOut:
+    value = owner_lab(db, user)
+    response.headers["Cache-Control"] = "private, no-store"
+    return OnboardingOut(completed_at=value.onboarding_completed_at,
+        network=network_out(value, settings), readiness=application_readiness(db, value, settings))
+
+
+@app.post("/api/v1/onboarding/complete", response_model=OnboardingOut,
+          dependencies=[Depends(require_csrf)], operation_id="complete_onboarding")
+def complete_onboarding(user: User = Depends(require_owner),
+                        db: Session = Depends(get_db)) -> OnboardingOut:
+    value = owner_lab(db, user)
+    report = application_readiness(db, value, settings)
+    if report.overall == "blocked":
+        raise HTTPException(status_code=409, detail="Required checks have not passed; refresh readiness and fix the listed errors")
+    value.onboarding_completed_at = datetime.now(UTC)
+    audit(db, user, "installation.onboarding_completed", "lab", value.id)
+    db.commit()
+    return OnboardingOut(completed_at=value.onboarding_completed_at,
+                         network=network_out(value, settings), readiness=report)
+
+
+@app.get("/api/v1/settings/network", response_model=NetworkOut, operation_id="get_network_settings")
+def get_network_settings(user: User = Depends(require_owner),
+                         db: Session = Depends(get_db)) -> NetworkOut:
+    return network_out(owner_lab(db, user), settings)
+
+
+@app.put("/api/v1/settings/network", response_model=NetworkOut,
+         dependencies=[Depends(require_csrf)], operation_id="save_network_settings")
+def save_network_settings(payload: NetworkInput, request: Request,
+                          user: User = Depends(require_owner), db: Session = Depends(get_db)) -> NetworkOut:
+    value = owner_lab(db, user)
+    value.public_url = payload.public_url
+    # Verify through an authenticated browser at the actual origin, never an SSRF-prone
+    # server-side fetch to an owner-supplied address. Re-saving elsewhere revokes verification.
+    try:
+        origin = normalize_public_url(request.headers.get("origin", ""))
+    except ValueError:
+        origin = ""
+    value.public_url_verified_at = datetime.now(UTC) if origin == payload.public_url else None
+    audit(db, user, "installation.network_updated", "lab", value.id,
+          verified=value.public_url_verified_at is not None)
+    db.commit()
+    return network_out(value, settings)
+
+
+@app.get("/api/v1/settings/installation", response_model=InstallationOverview,
+         operation_id="get_installation_settings")
+def get_installation_settings(response: Response, user: User = Depends(require_owner)) -> InstallationOverview:
+    response.headers["Cache-Control"] = "private, no-store"
+    return installation_overview(settings)
+
+
+@app.put("/api/v1/settings/installation", response_model=InstallationOverview,
+         dependencies=[Depends(require_csrf)], operation_id="save_installation_settings")
+def save_installation_settings(payload: InstallationPolicy, user: User = Depends(require_owner),
+                               db: Session = Depends(get_db)) -> InstallationOverview:
+    try:
+        save_installation_policy(settings, payload)
+    except (ValueError, OSError) as exc:
+        raise HTTPException(status_code=409, detail="Installer policy is not writable; run openlabctl doctor on the host") from exc
+    audit(db, user, "installation.policy_updated", "lab", lab_for_user(db, user), **payload.model_dump())
+    db.commit()
+    return installation_overview(settings)
 
 
 @app.put(
@@ -527,12 +636,18 @@ def provider_models(
             model=config.model,
             api_key=decrypt_secret(config.secret_ciphertext, settings.encryption_key),
         )
+        models = provider.list_models()
+        value = owner_lab(db, user)
+        value.integration_checks = {**(value.integration_checks or {}), "ai": {
+            "fingerprint": provider_fingerprint(config), "checked_at": datetime.now(UTC).isoformat(),
+        }}
+        db.commit()
         return {
-            "models": provider.list_models(),
+            "models": models,
             "egress": "local" if is_local_endpoint(config.base_url) else "external",
         }
     except ProviderError as exc:
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
+        raise HTTPException(status_code=502, detail="AI endpoint check failed. Verify the endpoint, credentials, network access, and model permissions.") from exc
 
 
 @app.get("/api/v1/things", response_model=list[ThingOut])
@@ -708,11 +823,12 @@ def get_location(
     return location_out(db, get_lab_location(db, user, location_id))
 
 
-def qr_target(location: Location, request: Request, base_url: str | None) -> str:
+def qr_target(location: Location, request: Request, base_url: str | None,
+              public_url: str | None = None) -> str:
     try:
         return location_capture_url(
             location.public_code,
-            configured_url=settings.public_url,
+            configured_url=public_url or settings.public_url,
             request_url=base_url or str(request.base_url),
         )
     except ValueError as exc:
@@ -728,8 +844,10 @@ def location_qr_info(
     db: Session = Depends(get_db),
 ) -> dict[str, str]:
     location = get_lab_location(db, user, location_id)
-    target_url = qr_target(location, request, base_url)
-    query = f"?{urlencode({'base_url': base_url})}" if base_url and not settings.public_url else ""
+    value = db.get(Lab, location.lab_id)
+    public_url = value.public_url if value else None
+    target_url = qr_target(location, request, base_url, public_url)
+    query = f"?{urlencode({'base_url': base_url})}" if base_url and not (public_url or settings.public_url) else ""
     return {
         "target_url": target_url,
         "svg_url": f"/api/v1/locations/{location.id}/qr.svg{query}",
@@ -746,7 +864,8 @@ def location_qr(
 ) -> FastAPIResponse:
     location = get_lab_location(db, user, location_id)
     output = BytesIO()
-    qrcode.make(qr_target(location, request, base_url), image_factory=SvgPathImage, border=2).save(
+    value = db.get(Lab, location.lab_id)
+    qrcode.make(qr_target(location, request, base_url, value.public_url if value else None), image_factory=SvgPathImage, border=2).save(
         output
     )
     return FastAPIResponse(

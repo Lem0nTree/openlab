@@ -1,0 +1,14 @@
+# Only used by openlabctl. Parent is read-only; the narrow policy directory is writable.
+# Never mount /var/run/docker.sock into the application.
+services:
+  openlab-server:
+    environment:
+      OPENLAB_INSTALLER_CONTROL_DIR: /run/openlab-installer
+    volumes:
+      - type: bind
+        source: /var/lib/openlab-installer/control
+        target: /run/openlab-installer
+        read_only: true
+      - type: bind
+        source: /var/lib/openlab-installer/control/policy
+        target: /run/openlab-installer/policy

@@ -105,7 +105,10 @@ if [ "$postgres_password" = 'replace-with-a-unique-postgres-password' ] || [ -z 
     # If .env was lost or copied from the example but the database volume
     # survived, generating a new password would make PostgreSQL unreachable.
     # Fail closed instead.
-    compose_project=${COMPOSE_PROJECT_NAME:-$(basename "$repo_root")}
+    # Compose derives its default project from the first compose file's directory,
+    # not the repository root. The old check missed deploy_openlab-postgres.
+    compose_project=${COMPOSE_PROJECT_NAME:-$(env_value COMPOSE_PROJECT_NAME 2>/dev/null || true)}
+    compose_project=${compose_project:-$(basename "$script_dir")}
     postgres_volume="${compose_project}_openlab-postgres"
     if command -v docker >/dev/null 2>&1 && docker volume inspect "$postgres_volume" >/dev/null 2>&1; then
         die "the existing PostgreSQL volume $postgres_volume was found but .env has no database password; restore the original .env instead of generating a new one"
