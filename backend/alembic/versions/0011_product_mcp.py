@@ -2,7 +2,6 @@
 
 from alembic import op
 
-
 revision = "0011_product_mcp"
 down_revision = "0010_installation_onboarding"
 branch_labels = None
