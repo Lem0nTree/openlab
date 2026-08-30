@@ -68,10 +68,19 @@ type Engine struct {
 	Version   string
 	PublicKey string
 	Runner    Runner
+	// Progress is terminal-only, fixed text emitted by lifecycle operations.
+	// It must never include command output, configuration, or credentials.
+	Progress func(string)
 	// Private dependency seams for disposable lifecycle fault-injection tests.
 	fetchRelease  func(context.Context, string, string) (Manifest, []byte, error)
 	downloadAsset func(context.Context, string, int64) ([]byte, error)
 	probeReady    func(context.Context) (Report, error)
+}
+
+func (e *Engine) progress(message string) {
+	if e.Progress != nil {
+		e.Progress(message)
+	}
 }
 
 func (e *Engine) fetch(ctx context.Context, version string) (Manifest, []byte, error) {
@@ -303,12 +312,14 @@ func (e *Engine) Doctor(ctx context.Context, publish bool) (Report, error) {
 			checks[index] = NewCheck("disk", "Operating disk space", true, host.FreeBytes >= 512*1024*1024, "DISK_LOW", "At least 512 MiB of operating headroom is required.", "Free disk space without removing OpenLab volumes.")
 		}
 	}
+	containerIDs := map[string]string{}
 	for _, service := range []string{"postgres", "openlab-server", "openlab-worker", "openlab-web"} {
 		raw, err := e.compose(ctx, 15*time.Second, config, "ps", "--all", "--quiet", service)
 		id := strings.TrimSpace(string(raw))
 		running := false
 		imageMatches := false
 		if err == nil && regexp.MustCompile(`^[a-f0-9]{12,64}$`).MatchString(id) {
+			containerIDs[service] = id
 			state, stateErr := e.runner().Run(ctx, 10*time.Second, nil, "docker", "inspect", "--format", "{{.State.Status}} {{if .State.Health}}{{.State.Health.Status}}{{end}}", id)
 			running = stateErr == nil && strings.HasPrefix(string(state), "running")
 			if service == "postgres" || service == "openlab-server" {
@@ -346,7 +357,14 @@ func (e *Engine) Doctor(ctx context.Context, publish bool) (Report, error) {
 		checks = append(checks, NewCheck(route.id, "HTTP "+route.path, true, ok, "HTTP_NOT_READY", "The application route must answer with the expected status.", "openlabctl logs --service openlab-web"))
 	}
 	heartbeatCode := "import json; from datetime import UTC,datetime; from sqlalchemy import select; from openlab.db import SessionLocal; from openlab.models import ServiceHeartbeat; from openlab.config import get_settings; db=SessionLocal(); row=db.scalar(select(ServiceHeartbeat).where(ServiceHeartbeat.service=='worker').order_by(ServiceHeartbeat.last_seen_at.desc()).limit(1)); print(json.dumps({'ready':bool(row and row.version==get_settings().version and 0 <= (datetime.now(UTC)-row.last_seen_at).total_seconds() <= 60)})); db.close()"
-	heartbeat, heartbeatErr := e.compose(ctx, 15*time.Second, config, "exec", "-T", "openlab-server", "python", "-c", heartbeatCode)
+	heartbeat := []byte(nil)
+	heartbeatErr := errors.New("OpenLab server container is unavailable")
+	if serverID := containerIDs["openlab-server"]; serverID != "" {
+		// Compose CLI startup alone exceeded the former 15-second budget on a
+		// Raspberry Pi 3B. The validated server container ID is already known,
+		// so a direct Docker exec remains bounded and avoids that extra overhead.
+		heartbeat, heartbeatErr = e.runner().Run(ctx, 30*time.Second, nil, "docker", "exec", serverID, "python", "-c", heartbeatCode)
+	}
 	var heartbeatResult struct {
 		Ready bool `json:"ready"`
 	}
@@ -381,13 +399,23 @@ func (e *Engine) waitReady(ctx context.Context) (Report, error) {
 	if e.probeReady != nil {
 		return e.probeReady(ctx)
 	}
-	deadline := time.Now().Add(5 * time.Minute)
+	const readinessWindow = 5 * time.Minute
+	started := time.Now()
+	deadline := started.Add(readinessWindow)
+	lastProgress := time.Time{}
 	var report Report
 	for time.Now().Before(deadline) {
 		next, err := e.Doctor(ctx, true)
 		report = next
 		if err == nil && report.Overall != "blocked" {
+			e.progress("Services are ready. Continue with the browser setup link when it is printed.")
 			return report, nil
+		}
+		if lastProgress.IsZero() || time.Since(lastProgress) >= 15*time.Second {
+			elapsed := time.Since(started)
+			filled := min(20, int(elapsed*20/readinessWindow))
+			e.progress(fmt.Sprintf("Checking service readiness [%s%s] %ds elapsed. This checks startup only; it does not wait for browser setup.", strings.Repeat("=", filled), strings.Repeat(".", 20-filled), int(elapsed.Seconds())))
+			lastProgress = time.Now()
 		}
 		select {
 		case <-ctx.Done():
@@ -395,6 +423,7 @@ func (e *Engine) waitReady(ctx context.Context) (Report, error) {
 		case <-time.After(3 * time.Second):
 		}
 	}
+	e.progress("Readiness did not complete within five minutes. Run openlabctl doctor for the exact failed check.")
 	return report, Fail("READINESS_TIMEOUT", "OpenLab did not become ready within five minutes.", "openlabctl doctor")
 }
 

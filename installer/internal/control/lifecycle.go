@@ -15,6 +15,7 @@ import (
 )
 
 func (e *Engine) Install(ctx context.Context, request Request) (any, error) {
+	e.progress("Validating the signed release and host prerequisites.")
 	plan, manifest, err := e.Plan(ctx, request)
 	if err != nil {
 		return nil, err
@@ -50,6 +51,7 @@ func (e *Engine) Install(ctx context.Context, request Request) (any, error) {
 		}
 		config = Config{SchemaVersion: 1, Version: manifest.Version, Project: "openlab", BindAddress: plan.Host.BindAddress, Port: plan.Port, Images: manifest.Images, SchemaRevision: manifest.SchemaRevision}
 	}
+	e.progress("Preparing protected OpenLab configuration and local secrets.")
 	bundleURL, _ := releaseURL(manifest.Version, "openlab-bundle.tar.gz")
 	bundle, err := e.download(ctx, bundleURL, 1024*1024)
 	if err != nil {
@@ -92,12 +94,15 @@ func (e *Engine) Install(ctx context.Context, request Request) (any, error) {
 	if err = saveConfig(config); err != nil {
 		return nil, err
 	}
+	e.progress("Pulling verified container images. This can take several minutes on a Raspberry Pi.")
 	if _, err = e.compose(ctx, 10*time.Minute, config, "pull"); err != nil {
 		return nil, err
 	}
+	e.progress("Starting OpenLab services and applying the release database schema.")
 	if _, err = e.compose(ctx, 5*time.Minute, config, "up", "-d", "--no-build"); err != nil {
 		return nil, err
 	}
+	e.progress("Waiting for the server, web app, database, and worker to become ready.")
 	report, err := e.waitReady(ctx)
 	if err != nil {
 		return report, err
