@@ -3,15 +3,15 @@
 .intro { max-width: 720px; margin-bottom: 32px; }
 .intro h1 { font-size: clamp(2rem, 5vw, 3.5rem); letter-spacing: -.04em; margin: 12px 0; }
 .intro p, .card > p, .footer { line-height: 1.65; color: var(--muted, #a8abb8); }
-.steps { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 18px; margin-bottom: 18px; }
-.steps button { display: flex; align-items: center; gap: 8px; white-space: nowrap; background: transparent; color: inherit; border: 1px solid #ffffff20; padding: 10px 13px; border-radius: 12px; }
+.steps { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 8px; margin-bottom: 18px; }
+.steps button { display: flex; flex-direction: column; justify-content: flex-start; align-items: center; gap: 8px; background: transparent; color: inherit; border: 1px solid #ffffff20; padding: 12px 8px; border-radius: 12px; font-size: 13px; line-height: 1.4; text-align: center; }
 .steps button[aria-current] { border-color: #99e2c0; background: #99e2c016; color: #b8f5d8; }
-.steps span { display: inline-grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; background: #ffffff12; font-size: 12px; }
+.steps span { display: inline-grid; place-items: center; width: 26px; height: 26px; flex: 0 0 26px; border-radius: 50%; background: #ffffff12; font-size: 12px; }
 .card { border: 1px solid #ffffff1c; background: #ffffff04; border-radius: 22px; padding: clamp(22px, 4vw, 44px); }
 .card h2 { font-size: 1.8rem; letter-spacing: -.03em; margin: 12px 0 20px; }
 .card h3 { margin-top: 28px; }
-.card form { margin: 24px 0; max-width: 620px; }
-.actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 22px; }
+.card form { margin: 24px 0; max-width: 720px; }
+.actions { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin-top: 18px; }
 .note { font-size: 13px; }
 .time { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
 .command { display: block; border: 1px solid #ffffff20; background: #00000022; border-radius: 10px; padding: 16px; overflow-x: auto; }
@@ -28,10 +28,44 @@
 .error, .message { padding: 16px; border: 1px solid #ff959550; border-radius: 12px; color: #ffbcbc; line-height: 1.6; }
 .message { border-color: #99e2c050; color: #b8f5d8; }
 .footer { margin-top: 28px; font-size: 13px; }
+.progress { color: #a8b6ae; font-size: 13px; margin: 0 0 16px; }
+.fields { display: grid; gap: 18px; padding: 0; margin: 0; border: 0; min-width: 0; }
+.card label { min-width: 0; line-height: 1.5; color: #b7c1bb; }
+.card input:not([type="checkbox"]), .card select { width: 100%; min-width: 0; min-height: 46px; border: 1px solid var(--line-bright); border-radius: 9px; background: var(--panel-2); color: var(--ink); padding: 11px 13px; }
+.card input[type="checkbox"] { width: 18px; height: 18px; min-height: 18px; flex: 0 0 18px; margin: 0; }
+.page button, .buttonLink { min-height: 44px; cursor: pointer; }
+.card button, .buttonLink { display: inline-flex; align-items: center; justify-content: center; padding: 11px 16px; border: 1px solid transparent; border-radius: 9px; background: var(--accent); color: #10170b; font-size: 14px; font-weight: 650; line-height: 1.4; text-align: center; }
+.card button:global(.secondary-button) { color: var(--ink); border-color: var(--line-bright); background: var(--panel-2); }
+.page button:disabled { cursor: not-allowed; opacity: .5; }
+.page :is(button, a, input, select):focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.card form > button { justify-self: start; }
+.card :is(p, li) { line-height: 1.65; }
+.card .note { margin: 0; line-height: 1.6; color: #a8b6ae; }
+.card > .note { margin-top: 16px; }
+.callout, .guide { max-width: 720px; margin: 24px 0; padding: 20px; border: 1px solid var(--line-bright); border-radius: 14px; background: var(--panel-2); }
+.callout { border-color: #99e2c040; background: #99e2c009; }
+.callout p, .guide p { color: #acb8b0; font-size: 14px; }
+.calloutHeading { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; }
+.freeBadge { border-radius: 999px; padding: 4px 9px; background: #c7ff4a18; color: var(--accent); font-size: 12px; font-weight: 650; }
+.card a:not(.buttonLink) { color: #b8f5d8; text-decoration: underline; text-underline-offset: 3px; }
+.actions a { font-size: 13px; }
+.guide h3 { margin: 0 0 12px; }
+.guide ol { padding-left: 22px; font-size: 14px; color: #acb8b0; }
+.guide li + li { margin-top: 10px; }
+.guide .command { margin: 14px 0; font-size: 13px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.status { padding: 12px 0; border-block: 1px solid var(--line); font-size: 14px; }
+.grants { list-style: none; padding: 0; }
+.grants li { display: grid; gap: 5px; padding: 12px 0; border-bottom: 1px solid var(--line); }
+.grants span { color: #acb8b0; font-size: 13px; overflow-wrap: anywhere; }
+.checks li > div { min-width: 0; overflow-wrap: anywhere; }
+@media (max-width: 850px) {
+  .steps { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
 @media (max-width: 600px) {
   .page { padding: 18px 14px 40px; }
   .header { padding-bottom: 24px; }
   .steps { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); overflow: visible; }
-  .steps button { min-width: 0; white-space: normal; text-align: left; }
-  .actions > button { width: 100%; }
+  .steps button { min-width: 0; flex-direction: row; justify-content: flex-start; text-align: left; }
+  .actions > button, .buttonLink { width: 100%; }
+  .callout, .guide { padding: 16px; }
 }

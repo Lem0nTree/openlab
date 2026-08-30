@@ -89,22 +89,53 @@ either installation path directly to an untrusted network.
 3. **Network:** save the canonical browser address while visiting that address.
    This verifies the authenticated browser origin, not reachability from every
    device. QR labels use the saved address.
-4. **AI, optional:** select a provider/model, save a key if required, and test the
-   endpoint. A successful model-list test does not prove every generation feature
+4. **AI, optional:** choose **Try with OpenRouter** to select its free-model router
+   (`openrouter/free`), or select another provider/model. Add a key if required,
+   then choose **Connect and continue**. This saves, enables, tests the endpoint,
+   and verifies AI readiness before advancing. **Skip AI** discards form changes
+   and disables processing. A successful model-list test does not prove every generation feature
    works. In Linux containers, a host-side Ollama can use
    `http://host.docker.internal:11434/v1` if Ollama is listening on an interface
    reachable by Docker. Container `localhost` is not the host.
-5. **KiCad, optional:** configure a binary available inside the worker image and
-   run its check. The standard image does not install KiCad automatically.
-6. **Access and updates:** see host/Tailscale status and choose the local-time
-   security-update maintenance window on managed installations.
-7. **Readiness:** fix any required failures, or finish with clearly identified
+5. **KiCad, optional:** use **Install KiCad and connect…** for the host installation
+   guide, then **Connect KiCad** to save and check the worker executable.
+   KiCad is needed for schematic electrical rules checks, not manual inventory.
+   It does not inspect physical wiring or certify circuit safety.
+6. **Access and updates:** use **Install Tailscale and connect…** for installation
+   and authorization instructions, or skip. The buttons provide a host-terminal
+   handoff; the web app has no host shell or Docker socket. Only fresh installer
+   evidence is reported as connected. Choose the local-time security-update window
+   on managed installations.
+7. **Product MCP, optional:** enable the integration, copy its HTTPS endpoint into
+   your MCP client, and authorize it in the browser. Enablement is distinct from
+   client authorization and recorded use. See [Product MCP](PRODUCT_MCP.md).
+8. **Readiness:** fix any required failures, or finish with clearly identified
    optional warnings. The page refreshes checks while open; no external ping or
    telemetry is sent.
 
 Saved configuration survives page reloads. Return through **Settings → Setup &
 readiness** at any time. The wizard never stores provider keys or bootstrap tokens
 in local storage. Skipping AI or KiCad leaves manual inventory available.
+
+### Add KiCad to a source-built worker
+
+Set `OPENLAB_INSTALL_KICAD=1` in the root `.env` file, then run from the checkout:
+
+```sh
+sh deploy/up.sh --build --no-deps -d openlab-worker
+```
+
+The optional build argument installs the distribution's KiCad package inside the
+worker image. It leaves the server image lightweight and retains KiCad across
+worker recreations and subsequent builds using that `.env` file. Package downloads
+can be large and restart the worker; let active jobs finish first. Use
+`kicad-cli` in onboarding and connect after the rebuild completes.
+
+This option is for source builds. Signed-release installations need a supported
+worker image supplied through their release process; the browser cannot replace
+signed images. Installing KiCad on the host alone does not make it available to
+the worker. Connection checks detect the binary version; a real schematic check
+is still needed to validate ERC compatibility.
 
 ## Everyday commands
 

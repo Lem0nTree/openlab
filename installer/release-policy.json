@@ -1,7 +1,7 @@
 {
   "classification": "feature",
   "unattended_safe": false,
-  "schema_revision": "0010_installation_onboarding",
+  "schema_revision": "0011_product_mcp",
   "minimum_installer": "v0.2.0",
-  "rollback_compatible_schemas": ["0009_lab_settings", "0010_installation_onboarding"]
+  "rollback_compatible_schemas": ["0009_lab_settings", "0010_installation_onboarding", "0011_product_mcp"]
 }
