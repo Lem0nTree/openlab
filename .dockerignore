@@ -1,5 +1,9 @@
 .git
 .github
+.codex
+.agents
+outputs
+installer/dist
 .env
 .env.*
 !.env.example

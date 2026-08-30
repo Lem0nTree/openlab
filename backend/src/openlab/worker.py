@@ -1,12 +1,17 @@
 """Durable PostgreSQL worker for OpenLab background jobs."""
 
 import logging
+import threading
 import time
+import uuid
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import or_, select
+from sqlalchemy import delete, or_, select
+from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy.exc import SQLAlchemyError
 
 from .alternatives import plan_alternatives
+from .config import get_settings
 from .db import SessionLocal
 from .enrichment import enrich_thing
 from .intelligence import (
@@ -15,7 +20,7 @@ from .intelligence import (
     embed_thing,
     plan_build,
 )
-from .models import InboxItem, Job, Lab
+from .models import InboxItem, Job, Lab, ServiceHeartbeat
 from .providers import ProviderError
 from .schematics import propose_schematic
 from .services import cleanup_expired_attachments, process_inbox_item
@@ -97,6 +102,7 @@ def run_job(job_id: str) -> None:
                 cli, source = effective_kicad_cli(lab)
                 result = check_kicad_cli(cli)
                 result["source"] = source
+                result["cli"] = cli
                 complete_job(job, result)
             else:
                 raise ProviderError(f"No enabled handler for job kind: {job.kind}")
@@ -121,7 +127,29 @@ def cleanup_artifacts() -> None:
             logger.info("Expired %s temporary job results", expired_jobs)
 
 
-def main() -> None:
+def heartbeat_loop(stop: threading.Event) -> None:
+    instance_id = str(uuid.uuid4())
+    while not stop.is_set():
+        try:
+            now = datetime.now(UTC)
+            with SessionLocal.begin() as db:
+                statement = insert(ServiceHeartbeat).values(
+                    instance_id=instance_id, service="worker",
+                    version=get_settings().version, last_seen_at=now,
+                )
+                db.execute(statement.on_conflict_do_update(
+                    index_elements=["instance_id"], set_={"last_seen_at": now},
+                ))
+                db.execute(delete(ServiceHeartbeat).where(
+                    ServiceHeartbeat.last_seen_at < now - timedelta(days=1)
+                ))
+        except SQLAlchemyError:
+            # Do not leak connection strings or credentials through diagnostics.
+            logger.warning("Worker heartbeat could not reach the database")
+        stop.wait(10)
+
+
+def worker_loop() -> None:
     logger.info("OpenLab worker started")
     next_cleanup = datetime.now(UTC)
     while True:
@@ -133,6 +161,17 @@ def main() -> None:
             time.sleep(2)
         else:
             run_job(job.id)
+
+
+def main() -> None:
+    stop = threading.Event()
+    thread = threading.Thread(target=heartbeat_loop, args=(stop,), daemon=True)
+    thread.start()
+    try:
+        worker_loop()
+    finally:
+        stop.set()
+        thread.join(timeout=5)
 
 
 if __name__ == "__main__":

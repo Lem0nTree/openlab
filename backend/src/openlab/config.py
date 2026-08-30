@@ -2,12 +2,12 @@ from functools import lru_cache
 from pathlib import Path
 from secrets import token_urlsafe
 
-from pydantic import AliasChoices, Field
+from pydantic import AliasChoices, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore", populate_by_name=True)
 
     app_name: str = "OpenLab"
     database_url: str
@@ -37,6 +37,17 @@ class Settings(BaseSettings):
         default=None,
         validation_alias=AliasChoices("OPENLAB_KICAD_CLI", "KICAD_CLI"),
     )
+    version: str = Field(default="development", validation_alias="OPENLAB_VERSION")
+    installer_control_dir: Path | None = Field(
+        default=None, validation_alias="OPENLAB_INSTALLER_CONTROL_DIR"
+    )
+
+    @field_validator("installer_control_dir", mode="before")
+    @classmethod
+    def empty_control_directory_is_unmanaged(cls, value: object) -> object:
+        # Compose passes optional variables as an empty string. Path("") would
+        # become the working directory and incorrectly enable managed readiness.
+        return None if isinstance(value, str) and not value.strip() else value
 
     @property
     def bootstrap_token(self) -> str:

@@ -1,4 +1,5 @@
 FROM node:24-bookworm-slim AS base
+ENV NEXT_TELEMETRY_DISABLED=1
 WORKDIR /app
 RUN corepack enable
 COPY web/package.json web/pnpm-lock.yaml web/pnpm-workspace.yaml ./
@@ -8,7 +9,7 @@ RUN pnpm build
 
 FROM node:24-bookworm-slim AS runner
 WORKDIR /app
-ENV NODE_ENV=production PORT=3000 HOSTNAME=0.0.0.0 NODE_OPTIONS=--max-old-space-size=128
+ENV NODE_ENV=production PORT=3000 HOSTNAME=0.0.0.0 NODE_OPTIONS=--max-old-space-size=128 NEXT_TELEMETRY_DISABLED=1
 RUN useradd --system --uid 10001 openlab
 COPY --from=base --chown=openlab:openlab /app/.next/standalone ./
 COPY --from=base --chown=openlab:openlab /app/.next/static ./.next/static

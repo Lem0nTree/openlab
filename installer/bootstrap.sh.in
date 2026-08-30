@@ -1,0 +1,43 @@
+#!/bin/sh
+# Download this versioned script, inspect it, then run it as your normal user.
+# Trust on first use is the reviewed script over GitHub HTTPS. Subsequent assets
+# are bound to the embedded Ed25519 key and exact release version.
+set -eu
+if [ "$(id -u)" = 0 ]; then
+  echo 'Run this bootstrap without sudo; the installer requests its scoped grant separately.' >&2
+  exit 1
+fi
+for prerequisite in curl openssl python3; do
+  command -v "$prerequisite" >/dev/null 2>&1 || { echo "Install $prerequisite first." >&2; exit 1; }
+done
+[ "$(uname -s)" = Linux ] || { echo 'Linux is required.' >&2; exit 1; }
+case "$(uname -m)" in
+  aarch64|arm64) arch=arm64 ;;
+  x86_64|amd64) arch=amd64 ;;
+  *) echo 'Use a 64-bit ARM64 or AMD64 operating system.' >&2; exit 1 ;;
+esac
+release='@VERSION@'
+base="https://github.com/Lem0nTree/openlab/releases/download/$release"
+stage=$(mktemp -d)
+# Exact directory allocated above, not a caller-provided deletion target.
+trap 'rm -f "$stage/release.json" "$stage/release.json.sig" "$stage/signature" "$stage/key.pem" "$stage/openlabctl"; rmdir "$stage"' EXIT HUP INT TERM
+download() { curl --fail --silent --show-error --location --proto '=https' --proto-redir '=https' --connect-timeout 15 --max-time 300 "$base/$1" -o "$2"; }
+download release.json "$stage/release.json"
+download release.json.sig "$stage/release.json.sig"
+printf '%s\n' '@PUBLIC_KEY_PEM@' > "$stage/key.pem"
+openssl base64 -d -A -in "$stage/release.json.sig" -out "$stage/signature"
+openssl pkeyutl -verify -pubin -inkey "$stage/key.pem" -rawin -in "$stage/release.json" -sigfile "$stage/signature" >/dev/null
+download "openlabctl-linux-$arch" "$stage/openlabctl"
+python3 - "$stage/release.json" "$stage/openlabctl" "$release" "$arch" <<'PY'
+import hashlib, json, pathlib, sys
+manifest = json.loads(pathlib.Path(sys.argv[1]).read_text())
+assert manifest['schema_version'] == 1 and manifest['version'] == sys.argv[3], 'Wrong release'
+expected = manifest['binaries']['openlabctl-linux-' + sys.argv[4]]
+assert hashlib.sha256(pathlib.Path(sys.argv[2]).read_bytes()).hexdigest() == expected, 'Binary checksum mismatch'
+PY
+chmod 700 "$stage/openlabctl"
+# Refresh/install the exact scoped helper from this newly verified binary. This
+# asks for the local sudo password and never exposes it to an AI or subprocess.
+sudo "$stage/openlabctl" authorize
+"$stage/openlabctl" install "$@"
+printf '\nOpenLab is installed. In this local terminal, run:\n  sudo openlabctl setup-link\n'

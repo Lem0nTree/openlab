@@ -1,0 +1,165 @@
+name: Signed installer release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Existing reviewed vMAJOR.MINOR.PATCH tag (never latest)
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: openlab-signed-release
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.tag.outputs.version }}
+    steps:
+      - name: Validate tag syntax before checkout
+        id: tag
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          [[ "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.tag.outputs.version }}
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.27.0'
+          cache: false
+      - run: cd installer && go test -race ./... && go vet ./...
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: '3.13'
+      - run: cd backend && uv sync --locked --group dev && uv run ruff check . && uv run pytest
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.19.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: cd web && pnpm install --frozen-lockfile && pnpm lint && pnpm typecheck && pnpm test
+
+  images:
+    needs: validate
+    runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      server: ${{ steps.server.outputs.digest }}
+      web: ${{ steps.web.outputs.digest }}
+      postgres: ${{ steps.postgres.outputs.image }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.validate.outputs.version }}
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        id: server
+        with:
+          context: .
+          file: deploy/Dockerfile.backend
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ghcr.io/lem0ntree/openlab-server:${{ needs.validate.outputs.version }}
+      - uses: docker/build-push-action@v6
+        id: web
+        with:
+          context: .
+          file: deploy/Dockerfile.web
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ghcr.io/lem0ntree/openlab-web:${{ needs.validate.outputs.version }}
+      - name: Resolve reviewed database multiarch digest
+        id: postgres
+        env:
+          POSTGRES_IMAGE: ${{ vars.OPENLAB_POSTGRES_IMAGE }}
+        run: |
+          [[ "$POSTGRES_IMAGE" =~ ^pgvector/pgvector@sha256:[a-f0-9]{64}$ ]]
+          docker buildx imagetools inspect --raw "$POSTGRES_IMAGE" > postgres-index.json
+          python3 -c 'import json; d=json.load(open("postgres-index.json")); a={x.get("platform",{}).get("architecture") for x in d.get("manifests",[]) if x.get("platform",{}).get("os")=="linux"}; assert {"amd64","arm64"} <= a'
+          echo "image=$POSTGRES_IMAGE" >> "$GITHUB_OUTPUT"
+
+  smoke:
+    needs: [validate, images]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.validate.outputs.version }}
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Verify exact published images before signing the installer release
+        env:
+          SERVER_DIGEST: ${{ needs.images.outputs.server }}
+          WEB_DIGEST: ${{ needs.images.outputs.web }}
+          POSTGRES_IMAGE: ${{ needs.images.outputs.postgres }}
+        run: python3 installer/tests/compose-smoke.py --server "ghcr.io/lem0ntree/openlab-server@$SERVER_DIGEST" --web "ghcr.io/lem0ntree/openlab-web@$WEB_DIGEST" --postgres "$POSTGRES_IMAGE"
+
+  package:
+    needs: [validate, images, smoke]
+    runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.validate.outputs.version }}
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.27.0'
+          cache: false
+      - name: Build static Linux installers with the public trust root
+        working-directory: installer
+        env:
+          VERSION: ${{ needs.validate.outputs.version }}
+          OPENLAB_RELEASE_PUBLIC_KEY: ${{ vars.OPENLAB_RELEASE_PUBLIC_KEY }}
+        run: |
+          python3 -c 'import base64,os; assert len(base64.b64decode(os.environ["OPENLAB_RELEASE_PUBLIC_KEY"],validate=True))==32'
+          mkdir -p dist
+          for arch in amd64 arm64; do
+            GOOS=linux GOARCH="$arch" CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X main.version=$VERSION -X main.releasePublicKey=$OPENLAB_RELEASE_PUBLIC_KEY" -o "dist/openlabctl-linux-$arch" ./cmd/openlabctl
+          done
+      - name: Sign exact artifact bytes using the protected release key
+        working-directory: installer
+        env:
+          VERSION: ${{ needs.validate.outputs.version }}
+          OPENLAB_RELEASE_PUBLIC_KEY: ${{ vars.OPENLAB_RELEASE_PUBLIC_KEY }}
+          OPENLAB_RELEASE_SIGNING_SEED: ${{ secrets.OPENLAB_RELEASE_SIGNING_SEED }}
+          SERVER_DIGEST: ${{ needs.images.outputs.server }}
+          WEB_DIGEST: ${{ needs.images.outputs.web }}
+          POSTGRES_IMAGE: ${{ needs.images.outputs.postgres }}
+        run: go run ./cmd/releasepack --version "$VERSION" --server "ghcr.io/lem0ntree/openlab-server@$SERVER_DIGEST" --web "ghcr.io/lem0ntree/openlab-web@$WEB_DIGEST" --postgres "$POSTGRES_IMAGE"
+      - name: Publish immutable versioned assets (never overwrite an existing release)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ needs.validate.outputs.version }}
+        run: |
+          if gh release view "$VERSION" >/dev/null 2>&1; then
+            echo 'This release already exists; refusing to overwrite signed assets.' >&2
+            exit 1
+          fi
+          gh release create "$VERSION" installer/dist/* --verify-tag --title "OpenLab $VERSION" --generate-notes --latest

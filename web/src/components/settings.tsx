@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
+import Link from "next/link";
 import { api, type Job, type KicadSettings, type LabSettings, type ProviderConfig, type SettingsOverview } from "@/lib/api";
 import { Shell } from "./shell";
 
@@ -117,7 +118,7 @@ export function Settings() {
 
   const kicad = overview?.kicad;
   return <Shell title="Settings"><div className="settings-layout">
-    <aside className="settings-nav"><p className="nav-label">SETTINGS</p><a href="#lab">Lab</a><a href="#smart-inbox">Smart Inbox</a><a href="#kicad">KiCad</a><a href="#privacy">Privacy and data</a><a href="#deployment">Deployment</a></aside>
+    <aside className="settings-nav"><p className="nav-label">SETTINGS</p><Link href="/onboarding">Setup & readiness</Link><a href="#lab">Lab</a><a href="#smart-inbox">Smart Inbox</a><a href="#kicad">KiCad</a><a href="#privacy">Privacy and data</a><a href="#deployment">Deployment</a></aside>
     <div className="settings-content">
       <section className="settings-section" id="lab"><div className="section-heading"><div><p className="eyebrow">LAB</p><h2>Identity and units</h2></div><span className="settings-state is-on">Local</span></div><p className="settings-copy">Name this installation and record its default measurement system.</p><form className="settings-form" onSubmit={saveLab}><label>Lab name<input value={labName} onChange={(event) => setLabName(event.target.value)} maxLength={200} required /></label><label>Default measurement system<select value={units} onChange={(event) => setUnits(event.target.value as "metric" | "imperial")}><option value="metric">Metric</option><option value="imperial">Imperial</option></select></label><div className="settings-actions"><button disabled={loading}>Save lab</button></div></form></section>
 
