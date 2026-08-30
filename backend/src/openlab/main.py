@@ -1,7 +1,8 @@
+import base64
 import logging
 import re
 from collections.abc import Callable
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from hashlib import sha256
 from http import HTTPStatus
 from io import BytesIO
@@ -10,9 +11,20 @@ from urllib.parse import urlencode
 
 import qrcode  # type: ignore[import-untyped]
 from argon2.exceptions import VerifyMismatchError
-from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request, Response, UploadFile
+from fastapi import (
+    Cookie,
+    Depends,
+    FastAPI,
+    Form,
+    Header,
+    HTTPException,
+    Query,
+    Request,
+    Response,
+    UploadFile,
+)
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.responses import Response as FastAPIResponse
 from qrcode.image.svg import SvgPathImage  # type: ignore[import-untyped]
 from sqlalchemy import func, or_, select, text
@@ -37,6 +49,18 @@ from .installation import (
     save_installation_policy,
 )
 from .intelligence import accept_build_plan, queue_thing_embedding, search_inventory
+from .mcp_auth import (
+    ACCESS_LIFETIME,
+    MCP_SCOPES,
+    canonical_mcp_url,
+    hash_credential,
+    register_public_client,
+    rotate_refresh,
+)
+from .mcp_auth import (
+    ensure_enabled as ensure_mcp_enabled,
+)
+from .mcp_server import product_mcp
 from .models import (
     Allocation,
     Capability,
@@ -45,6 +69,9 @@ from .models import (
     Job,
     Lab,
     Location,
+    McpAuthorizationCode,
+    McpGrant,
+    McpOAuthClient,
     Membership,
     Pin,
     Project,
@@ -98,6 +125,9 @@ from .schemas import (
     LocationOut,
     LocationQRInfo,
     LoginRequest,
+    McpIntegrationInput,
+    McpIntegrationOut,
+    McpRevokeInput,
     PinOut,
     PinoutReplace,
     ProjectCreate,
@@ -153,6 +183,16 @@ app = FastAPI(
     docs_url=None,
     redoc_url=None,
 )
+app.mount(
+    "/mcp",
+    product_mcp.streamable_http_app(
+        streamable_http_path="/",
+        json_response=True,
+        stateless_http=True,
+        max_request_body_size=64 * 1024,
+        host="localhost",
+    ),
+)
 
 
 def problem(code: int, title: str, detail: str) -> JSONResponse:
@@ -186,6 +226,227 @@ def require_owner(user: User = Depends(current_user)) -> User:
     if not user.is_owner:
         raise HTTPException(status_code=403, detail="Only the lab owner may change settings")
     return user
+
+
+def mcp_grant_out(db: Session, grant: McpGrant) -> dict[str, object]:
+    client = db.get(McpOAuthClient, grant.client_id)
+    return {
+        "id": grant.id,
+        "client_id": grant.client_id,
+        "client_name": client.name if client else "Unknown MCP client",
+        "scopes": grant.scopes,
+        "created_at": grant.created_at,
+        "last_used_at": grant.last_used_at,
+        "refresh_expires_at": grant.refresh_expires_at,
+    }
+
+
+@app.get("/api/v1/integrations/mcp", response_model=McpIntegrationOut)
+def get_mcp_integration(user: User = Depends(require_owner), db: Session = Depends(get_db)) -> dict[str, object]:
+    lab = db.get(Lab, lab_for_user(db, user))
+    assert lab is not None
+    grants = db.scalars(
+        select(McpGrant)
+        .where(McpGrant.lab_id == lab.id, McpGrant.revoked_at.is_(None))
+        .order_by(McpGrant.created_at.desc())
+    ).all()
+    return {
+        "enabled": lab.mcp_enabled,
+        "direct_http_ready": canonical_mcp_url(lab.public_url or settings.public_url) is not None,
+        "mcp_url": canonical_mcp_url(lab.public_url or settings.public_url),
+        "grants": [mcp_grant_out(db, grant) for grant in grants],
+    }
+
+
+@app.put(
+    "/api/v1/integrations/mcp",
+    response_model=McpIntegrationOut,
+    dependencies=[Depends(require_csrf)],
+)
+def save_mcp_integration(
+    payload: McpIntegrationInput,
+    user: User = Depends(require_owner),
+    db: Session = Depends(get_db),
+) -> dict[str, object]:
+    lab = db.get(Lab, lab_for_user(db, user))
+    assert lab is not None
+    lab.mcp_enabled = payload.enabled
+    audit(db, user, "mcp.integration_updated", "lab", lab.id, enabled=payload.enabled)
+    db.commit()
+    return get_mcp_integration(user, db)
+
+
+@app.post("/api/v1/integrations/mcp/revoke", status_code=204, dependencies=[Depends(require_csrf)])
+def revoke_mcp_grant(
+    payload: McpRevokeInput,
+    user: User = Depends(require_owner),
+    db: Session = Depends(get_db),
+) -> None:
+    grant = db.scalar(
+        select(McpGrant).where(McpGrant.id == payload.grant_id, McpGrant.lab_id == lab_for_user(db, user))
+    )
+    if not grant:
+        raise HTTPException(status_code=404, detail="MCP grant not found")
+    grant.revoked_at = datetime.now(UTC)
+    audit(db, user, "mcp.grant_revoked", "mcp_grant", grant.id)
+    db.commit()
+
+
+@app.get("/.well-known/oauth-protected-resource", include_in_schema=False)
+def mcp_protected_resource_metadata(request: Request) -> dict[str, object]:
+    origin = str(request.base_url).rstrip("/")
+    return {
+        "resource": f"{origin}/mcp",
+        "authorization_servers": [origin],
+        "scopes_supported": sorted(MCP_SCOPES),
+    }
+
+
+@app.get("/.well-known/oauth-authorization-server", include_in_schema=False)
+def mcp_authorization_metadata(request: Request) -> dict[str, object]:
+    origin = str(request.base_url).rstrip("/")
+    return {
+        "issuer": origin,
+        "authorization_endpoint": f"{origin}/oauth/authorize",
+        "token_endpoint": f"{origin}/oauth/token",
+        "registration_endpoint": f"{origin}/oauth/register",
+        "revocation_endpoint": f"{origin}/oauth/revoke",
+        "response_types_supported": ["code"],
+        "grant_types_supported": ["authorization_code", "refresh_token"],
+        "code_challenge_methods_supported": ["S256"],
+        "scopes_supported": sorted(MCP_SCOPES),
+        "token_endpoint_auth_methods_supported": ["none"],
+    }
+
+
+@app.post("/oauth/register", include_in_schema=False)
+def register_mcp_oauth_client(payload: dict[str, object], db: Session = Depends(get_db)) -> dict[str, object]:
+    redirect_uris = payload.get("redirect_uris")
+    if not isinstance(redirect_uris, list) or not all(isinstance(value, str) for value in redirect_uris):
+        raise HTTPException(status_code=422, detail="redirect_uris must be a non-empty string list")
+    client_id = token_urlsafe(24)
+    name = str(payload.get("client_name", "MCP client"))
+    client = register_public_client(db, client_id, name, list(redirect_uris))
+    db.commit()
+    return {"client_id": client.id, "client_name": client.name, "redirect_uris": client.redirect_uris, "grant_types": client.grant_types, "token_endpoint_auth_method": "none"}
+
+
+@app.get("/oauth/authorize", response_class=HTMLResponse, include_in_schema=False)
+def authorize_mcp_oauth(
+    request: Request,
+    client_id: str,
+    redirect_uri: str,
+    response_type: str,
+    code_challenge: str,
+    code_challenge_method: str,
+    scope: str = "openlab:read",
+    state: str | None = None,
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+) -> HTMLResponse:
+    if response_type != "code" or code_challenge_method != "S256" or len(code_challenge) < 43:
+        raise HTTPException(status_code=422, detail="MCP OAuth requires authorization code with PKCE S256")
+    ensure_mcp_enabled(db, user)
+    client = db.get(McpOAuthClient, client_id)
+    requested = sorted(set(scope.split()))
+    if not client or redirect_uri not in client.redirect_uris or not requested or not set(requested).issubset(MCP_SCOPES):
+        raise HTTPException(status_code=422, detail="Invalid MCP OAuth authorization request")
+    csrf = request.cookies.get("openlab_csrf")
+    if not csrf:
+        raise HTTPException(status_code=403, detail="CSRF cookie is required for MCP approval")
+    fields = {"client_id": client_id, "redirect_uri": redirect_uri, "code_challenge": code_challenge, "scope": " ".join(requested), "state": state or "", "csrf": csrf}
+    hidden = "".join(f'<input type="hidden" name="{key}" value="{value}">' for key, value in fields.items())
+    return HTMLResponse(f"""<!doctype html><title>Authorize OpenLab MCP</title><main><h1>Authorize {client.name}</h1><p>This client requests: {', '.join(requested)}.</p><form method=post action=/oauth/authorize/approve>{hidden}<button type=submit>Approve OpenLab access</button></form></main>""", headers={"Cache-Control": "no-store"})
+
+
+@app.post("/oauth/authorize/approve", include_in_schema=False)
+def approve_mcp_oauth(
+    client_id: str = Form(),
+    redirect_uri: str = Form(),
+    code_challenge: str = Form(),
+    scope: str = Form(),
+    state: str = Form(default=""),
+    csrf: str = Form(),
+    csrf_cookie: str | None = Cookie(default=None, alias="openlab_csrf"),
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+) -> Response:
+    if not csrf_cookie or not compare_digest(csrf, csrf_cookie):
+        raise HTTPException(status_code=403, detail="CSRF validation failed")
+    lab = ensure_mcp_enabled(db, user)
+    client = db.get(McpOAuthClient, client_id)
+    scopes = sorted(set(scope.split()))
+    if not client or redirect_uri not in client.redirect_uris or not scopes or not set(scopes).issubset(MCP_SCOPES):
+        raise HTTPException(status_code=422, detail="Invalid MCP OAuth approval")
+    grant = McpGrant(lab_id=lab.id, user_id=user.id, client_id=client.id, scopes=scopes)
+    db.add(grant)
+    db.flush()
+    raw_code = token_urlsafe(32)
+    db.add(McpAuthorizationCode(
+        grant_id=grant.id,
+        code_hash=hash_credential(raw_code),
+        code_challenge=code_challenge,
+        redirect_uri=redirect_uri,
+        expires_at=datetime.now(UTC).replace(microsecond=0) + timedelta(minutes=5),
+    ))
+    audit(db, user, "mcp.grant_authorized", "mcp_grant", grant.id, client_id=client.id, scopes=scopes)
+    db.commit()
+    destination = f"{redirect_uri}{'&' if '?' in redirect_uri else '?'}{urlencode({'code': raw_code, **({'state': state} if state else {})})}"
+    return RedirectResponse(destination, status_code=302, headers={"Cache-Control": "no-store"})
+
+
+@app.post("/oauth/token", include_in_schema=False)
+def exchange_mcp_oauth_token(
+    grant_type: str = Form(),
+    client_id: str = Form(),
+    code: str | None = Form(default=None),
+    redirect_uri: str | None = Form(default=None),
+    code_verifier: str | None = Form(default=None),
+    refresh_token: str | None = Form(default=None),
+    db: Session = Depends(get_db),
+) -> dict[str, object]:
+    client = db.get(McpOAuthClient, client_id)
+    if not client:
+        raise HTTPException(status_code=401, detail="Unknown MCP client")
+    if grant_type == "authorization_code":
+        if not code or not redirect_uri or not code_verifier:
+            raise HTTPException(status_code=422, detail="Authorization code, redirect URI, and PKCE verifier are required")
+        authorization = db.scalar(select(McpAuthorizationCode).where(McpAuthorizationCode.code_hash == hash_credential(code)).with_for_update())
+        if not authorization or authorization.consumed_at or authorization.expires_at <= datetime.now(UTC) or authorization.redirect_uri != redirect_uri:
+            raise HTTPException(status_code=401, detail="Invalid or expired authorization code")
+        verifier_digest = base64.urlsafe_b64encode(sha256(code_verifier.encode()).digest()).decode().rstrip("=")
+        if not compare_digest(verifier_digest, authorization.code_challenge):
+            raise HTTPException(status_code=401, detail="PKCE verification failed")
+        grant = db.get(McpGrant, authorization.grant_id)
+        if not grant or grant.client_id != client.id:
+            raise HTTPException(status_code=401, detail="Invalid MCP authorization grant")
+        access, refresh = token_urlsafe(32), token_urlsafe(40)
+        grant.access_token_hash = hash_credential(access)
+        grant.access_expires_at = datetime.now(UTC) + ACCESS_LIFETIME
+        grant.refresh_token_hash = hash_credential(refresh)
+        grant.refresh_expires_at = datetime.now(UTC) + timedelta(days=30)
+        authorization.consumed_at = datetime.now(UTC)
+        db.commit()
+        return {"access_token": access, "token_type": "Bearer", "expires_in": int(ACCESS_LIFETIME.total_seconds()), "refresh_token": refresh, "scope": " ".join(grant.scopes)}
+    if grant_type == "refresh_token":
+        if not refresh_token:
+            raise HTTPException(status_code=422, detail="Refresh token is required")
+        grant = db.scalar(select(McpGrant).where(McpGrant.refresh_token_hash == hash_credential(refresh_token)).with_for_update())
+        if not grant or grant.client_id != client.id:
+            raise HTTPException(status_code=401, detail="Invalid MCP refresh token")
+        access, refresh = rotate_refresh(db, grant)
+        db.commit()
+        return {"access_token": access, "token_type": "Bearer", "expires_in": int(ACCESS_LIFETIME.total_seconds()), "refresh_token": refresh, "scope": " ".join(grant.scopes)}
+    raise HTTPException(status_code=422, detail="Unsupported MCP OAuth grant type")
+
+
+@app.post("/oauth/revoke", status_code=204, include_in_schema=False)
+def revoke_mcp_oauth_token(token: str = Form(), db: Session = Depends(get_db)) -> None:
+    value = hash_credential(token)
+    grant = db.scalar(select(McpGrant).where((McpGrant.access_token_hash == value) | (McpGrant.refresh_token_hash == value)))
+    if grant:
+        grant.revoked_at = datetime.now(UTC)
+        db.commit()
 
 
 def provider_out(config: ProviderConfig) -> dict[str, object]:

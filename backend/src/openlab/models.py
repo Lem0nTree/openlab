@@ -56,6 +56,7 @@ class Lab(Base, Timestamped):
     public_url_verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     onboarding_completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     integration_checks: Mapped[dict[str, object]] = mapped_column(JSONB, default=dict, nullable=False)
+    mcp_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
 
 class ServiceHeartbeat(Base):
@@ -90,6 +91,69 @@ class SessionToken(Base):
     user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
     token_hash: Mapped[str] = mapped_column(String(128), unique=True, nullable=False)
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class McpOAuthClient(Base, Timestamped):
+    """A public OAuth client registered by an MCP harness."""
+
+    __tablename__ = "mcp_oauth_clients"
+    id: Mapped[str] = mapped_column(String(120), primary_key=True)
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    redirect_uris: Mapped[list[str]] = mapped_column(JSONB, default=list, nullable=False)
+    grant_types: Mapped[list[str]] = mapped_column(JSONB, default=list, nullable=False)
+
+
+class McpGrant(Base, Timestamped):
+    """Hashed OAuth credentials for one user, lab, and public MCP client."""
+
+    __tablename__ = "mcp_grants"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    lab_id: Mapped[str] = mapped_column(ForeignKey("labs.id"), nullable=False, index=True)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
+    client_id: Mapped[str] = mapped_column(ForeignKey("mcp_oauth_clients.id"), nullable=False)
+    scopes: Mapped[list[str]] = mapped_column(JSONB, default=list, nullable=False)
+    access_token_hash: Mapped[str | None] = mapped_column(String(128), unique=True)
+    access_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    refresh_token_hash: Mapped[str | None] = mapped_column(String(128), unique=True)
+    refresh_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class McpAuthorizationCode(Base):
+    __tablename__ = "mcp_authorization_codes"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    grant_id: Mapped[str] = mapped_column(ForeignKey("mcp_grants.id"), nullable=False, index=True)
+    code_hash: Mapped[str] = mapped_column(String(128), unique=True, nullable=False)
+    code_challenge: Mapped[str] = mapped_column(String(256), nullable=False)
+    redirect_uri: Mapped[str] = mapped_column(String(2000), nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    consumed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class McpActionReceipt(Base):
+    __tablename__ = "mcp_action_receipts"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    grant_id: Mapped[str] = mapped_column(ForeignKey("mcp_grants.id"), nullable=False, index=True)
+    action: Mapped[str] = mapped_column(String(120), nullable=False)
+    payload: Mapped[dict[str, object]] = mapped_column(JSONB, default=dict, nullable=False)
+    payload_hash: Mapped[str] = mapped_column(String(128), nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    consumed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    result: Mapped[dict[str, object] | None] = mapped_column(JSONB)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class McpIdempotencyResult(Base):
+    __tablename__ = "mcp_idempotency_results"
+    __table_args__ = (UniqueConstraint("grant_id", "request_id", name="uq_mcp_idempotency"),)
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    grant_id: Mapped[str] = mapped_column(ForeignKey("mcp_grants.id"), nullable=False, index=True)
+    request_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    action: Mapped[str] = mapped_column(String(120), nullable=False)
+    result: Mapped[dict[str, object]] = mapped_column(JSONB, default=dict, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 

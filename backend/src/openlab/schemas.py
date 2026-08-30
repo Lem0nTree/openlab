@@ -480,3 +480,31 @@ class AIAnswer(BaseModel):
     status: Literal["disabled", "ready"]
     answer: str
     evidence: list[dict[str, object]] = Field(default_factory=list)
+
+
+McpScope = Literal["openlab:read", "openlab:write", "openlab:commit", "openlab:ai"]
+
+
+class McpIntegrationInput(StrictInput):
+    enabled: bool
+
+
+class McpGrantOut(APIModel):
+    id: str
+    client_id: str
+    client_name: str
+    scopes: list[str]
+    created_at: datetime
+    last_used_at: datetime | None
+    refresh_expires_at: datetime | None
+
+
+class McpIntegrationOut(BaseModel):
+    enabled: bool
+    direct_http_ready: bool
+    mcp_url: str | None
+    grants: list[McpGrantOut] = Field(default_factory=list)
+
+
+class McpRevokeInput(StrictInput):
+    grant_id: str

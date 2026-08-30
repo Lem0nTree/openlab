@@ -91,7 +91,7 @@ def test_readiness_detects_stale_worker_and_never_returns_credentials(tmp_path: 
 
 def test_fresh_matching_worker_and_optional_skips_are_ready(tmp_path: Path) -> None:
     db = MagicMock()
-    db.execute.return_value.scalars.return_value = ["0010_installation_onboarding"]
+    db.execute.return_value.scalars.return_value = ["0011_product_mcp"]
     db.scalar.side_effect = [ServiceHeartbeat(instance_id="worker", service="worker", version="development",
         last_seen_at=datetime.now(UTC)), None, None]
     lab = Lab(id="lab", name="Lab", public_url="http://lab.local", public_url_verified_at=datetime.now(UTC))
