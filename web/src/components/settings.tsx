@@ -2,7 +2,7 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import Link from "next/link";
-import { api, type Job, type KicadSettings, type LabSettings, type ProviderConfig, type SettingsOverview } from "@/lib/api";
+import { api, type Job, type KicadSettings, type LabSettings, type McpIntegration, type ProviderConfig, type SettingsOverview } from "@/lib/api";
 import { Shell } from "./shell";
 
 const presets = {
@@ -30,6 +30,7 @@ export function Settings() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [checkingKicad, setCheckingKicad] = useState(false);
+  const [mcp, setMcp] = useState<McpIntegration | null>(null);
 
   function applyOverview(value: SettingsOverview) {
     setOverview(value);
@@ -43,8 +44,8 @@ export function Settings() {
   }
 
   useEffect(() => {
-    Promise.all([api<ProviderConfig | null>("/ai/provider"), api<SettingsOverview>("/settings")])
-      .then(([provider, settings]) => {
+    Promise.all([api<ProviderConfig | null>("/ai/provider"), api<SettingsOverview>("/settings"), api<McpIntegration>("/integrations/mcp")])
+      .then(([provider, settings, integration]) => {
         setConfig(provider);
         setBaseUrl(provider?.base_url ?? "");
         setModel(provider?.model ?? "");
@@ -52,6 +53,7 @@ export function Settings() {
         setEnabled(provider?.enabled ?? false);
         setEmbeddingsEnabled(provider?.embeddings_enabled ?? false);
         applyOverview(settings);
+        setMcp(integration);
       })
       .catch((e: Error) => setError(e.message))
       .finally(() => setLoading(false));
@@ -116,13 +118,29 @@ export function Settings() {
     } catch (e) { setError((e as Error).message); }
   }
 
+  async function saveMcp(enabled: boolean) {
+    clearFeedback();
+    try {
+      const saved = await api<McpIntegration>("/integrations/mcp", { method: "PUT", body: JSON.stringify({ enabled }) });
+      setMcp(saved); setMessage(enabled ? "MCP integration enabled." : "MCP integration disabled.");
+    } catch (e) { setError((e as Error).message); }
+  }
+
+  async function revokeMcpGrant(id: string) {
+    clearFeedback();
+    try { await api<void>("/integrations/mcp/revoke", { method: "POST", body: JSON.stringify({ grant_id: id }) }); setMcp(await api<McpIntegration>("/integrations/mcp")); setMessage("MCP client revoked."); }
+    catch (e) { setError((e as Error).message); }
+  }
+
   const kicad = overview?.kicad;
   return <Shell title="Settings"><div className="settings-layout">
-    <aside className="settings-nav"><p className="nav-label">SETTINGS</p><Link href="/onboarding">Setup & readiness</Link><a href="#lab">Lab</a><a href="#smart-inbox">Smart Inbox</a><a href="#kicad">KiCad</a><a href="#privacy">Privacy and data</a><a href="#deployment">Deployment</a></aside>
+    <aside className="settings-nav"><p className="nav-label">SETTINGS</p><Link href="/onboarding">Setup & readiness</Link><a href="#lab">Lab</a><a href="#smart-inbox">Smart Inbox</a><a href="#mcp">MCP integrations</a><a href="#kicad">KiCad</a><a href="#privacy">Privacy and data</a><a href="#deployment">Deployment</a></aside>
     <div className="settings-content">
       <section className="settings-section" id="lab"><div className="section-heading"><div><p className="eyebrow">LAB</p><h2>Identity and units</h2></div><span className="settings-state is-on">Local</span></div><p className="settings-copy">Name this installation and record its default measurement system.</p><form className="settings-form" onSubmit={saveLab}><label>Lab name<input value={labName} onChange={(event) => setLabName(event.target.value)} maxLength={200} required /></label><label>Default measurement system<select value={units} onChange={(event) => setUnits(event.target.value as "metric" | "imperial")}><option value="metric">Metric</option><option value="imperial">Imperial</option></select></label><div className="settings-actions"><button disabled={loading}>Save lab</button></div></form></section>
 
       <section className="settings-section" id="smart-inbox"><div className="section-heading"><div><p className="eyebrow">SMART INBOX</p><h2>Processing model</h2></div><span className={`settings-state ${enabled || embeddingsEnabled ? "is-on" : ""}`}>{enabled || embeddingsEnabled ? "Enabled" : "Disabled"}</span></div><p className="settings-copy">Choose one OpenAI-compatible endpoint for candidate extraction. The Inbox stays usable with AI disabled.</p><form className="settings-form" onSubmit={saveProvider}><label>Provider preset<select value={preset} onChange={(event) => { const value = event.target.value; setPreset(value); if (value) setBaseUrl(presets[value as keyof typeof presets]); }}><option value="">Custom endpoint</option><option value="ollama">Ollama on this network</option><option value="openrouter">OpenRouter</option><option value="openai">OpenAI</option></select></label><label>Endpoint URL<input value={baseUrl} onChange={(event) => setBaseUrl(event.target.value)} type="url" placeholder="http://localhost:11434/v1" required /></label><label>Processing model ID<input value={model} onChange={(event) => setModel(event.target.value)} list="provider-models" placeholder="qwen2.5-vl:7b" required /><datalist id="provider-models">{models.map((item) => <option key={item} value={item} />)}</datalist></label><label>Embedding model ID<input value={embeddingModel} onChange={(event) => setEmbeddingModel(event.target.value)} list="provider-models" placeholder="text-embedding-3-small" /></label><label>API key<input value={apiKey} onChange={(event) => setApiKey(event.target.value)} type="password" placeholder={config?.has_api_key ? "Stored securely; leave blank to keep" : "Not required for local endpoints"} /></label><label className="check-row"><input checked={enabled} onChange={(event) => setEnabled(event.target.checked)} type="checkbox" /> Enable processing for new Inbox items</label><label className="check-row"><input checked={embeddingsEnabled} onChange={(event) => setEmbeddingsEnabled(event.target.checked)} type="checkbox" /> Enable semantic inventory retrieval</label><div className="settings-actions"><button disabled={loading || (embeddingsEnabled && !embeddingModel)}>Save model</button><button className="secondary-button" type="button" onClick={loadModels}>Test endpoint</button></div></form>{config && (config.enabled || config.embeddings_enabled) && <p className={config.egress === "external" ? "settings-warning" : "settings-note"}>{config.egress === "external" ? "External processing is enabled. Captures or canonical profiles may leave this local server." : "Local endpoint detected. Captured content and canonical profiles stay on your configured network."}</p>}</section>
+
+      <section className="settings-section" id="mcp"><div className="section-heading"><div><p className="eyebrow">MCP INTEGRATIONS</p><h2>Connected AI harnesses</h2></div><span className={`settings-state ${mcp?.enabled ? "is-on" : ""}`}>{mcp?.enabled ? "Enabled" : "Disabled"}</span></div><p className="settings-copy">Product MCP shares typed lab records with approved clients. It never exposes provider keys, setup controls, files, or shell access.</p><div className="settings-actions"><button type="button" onClick={() => void saveMcp(!mcp?.enabled)}>{mcp?.enabled ? "Disable MCP" : "Enable MCP"}</button></div><div className="settings-fact"><span>Direct transport</span><strong>{mcp?.direct_transport === "https" ? "Verified HTTPS" : "SSH stdio required"}</strong></div>{mcp?.grants.map((grant) => <div className="environment-row" key={grant.id}><div><strong>{grant.client_name}</strong><p>{grant.scopes.join(", ")} · last used {grant.last_used_at ? new Date(grant.last_used_at).toLocaleString() : "never"}</p></div><button className="secondary-button" type="button" onClick={() => void revokeMcpGrant(grant.id)}>Revoke</button></div>)}</section>
 
       <section className="settings-section" id="kicad"><div className="section-heading"><div><p className="eyebrow">KICAD</p><h2>Electrical rules check</h2></div><span className={`settings-state ${kicad?.check_status === "available" ? "is-on" : ""}`}>{kicad?.check_status?.replaceAll("_", " ") ?? "Unknown"}</span></div><p className="settings-copy">The command must exist inside the worker container. OpenLab’s standard Raspberry Pi image stays lightweight and does not install KiCad.</p><form className="settings-form" onSubmit={saveKicad}><label>Worker command or path<input value={kicadPath} onChange={(event) => setKicadPath(event.target.value)} placeholder="kicad-cli or /usr/bin/kicad-cli" maxLength={500} /></label><div className="settings-actions"><button disabled={loading || checkingKicad}>{checkingKicad ? "Checking…" : "Save and check"}</button><button type="button" className="secondary-button" disabled={checkingKicad} onClick={() => void checkKicad()}>Check again</button></div></form><div className="settings-fact"><span>Effective command</span><strong>{kicad?.effective_cli ?? "Not configured"}</strong></div><div className="settings-fact"><span>Configuration source</span><strong>{kicad?.source === "settings" ? "Settings override" : kicad?.source === "environment" ? "OPENLAB_KICAD_CLI" : "None"}</strong></div>{kicad?.version && <p className="settings-note">Worker detected {kicad.version}.</p>}{kicad?.error && <p className="settings-warning">{kicad.error}</p>}</section>
 

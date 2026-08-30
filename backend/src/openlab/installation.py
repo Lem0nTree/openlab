@@ -344,6 +344,25 @@ def application_readiness(db: Session, lab: Lab, settings: Settings) -> Readines
         else "Save and verify the address from a browser visiting that address.",
         "Open the chosen URL, then save it under Network.",
     )
+    mcp_url = (lab.public_url or settings.public_url or "").rstrip("/")
+    mcp_direct_ready = bool(lab.mcp_enabled and mcp_url.startswith("https://"))
+    checks.append(
+        ReadinessCheck(
+            id="mcp",
+            label="Product MCP",
+            required=False,
+            status="pass" if mcp_direct_ready else "warn",
+            code="OK" if mcp_direct_ready else "MCP_DISABLED" if not lab.mcp_enabled else "MCP_HTTPS_REQUIRED",
+            summary="Product MCP is enabled on the verified HTTPS origin."
+            if mcp_direct_ready
+            else "Product MCP is disabled by the lab owner."
+            if not lab.mcp_enabled
+            else "Use SSH stdio on this HTTP installation or configure a verified HTTPS origin.",
+            remediation="Enable MCP in Settings and configure HTTPS for direct network clients."
+            if not mcp_direct_ready
+            else None,
+        )
+    )
     provider = db.scalar(
         select(ProviderConfig)
         .where(ProviderConfig.lab_id == lab.id)

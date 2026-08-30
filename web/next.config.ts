@@ -7,7 +7,14 @@ const api = process.env.OPENLAB_API_INTERNAL_URL ?? "http://openlab-server:8000"
 const nextConfig: NextConfig = {
   output: "standalone",
   async rewrites() {
-    return [{ source: "/api/v1/:path*", destination: `${api}/api/v1/:path*` }];
+    return [
+      { source: "/api/v1/:path*", destination: `${api}/api/v1/:path*` },
+      // Product MCP stays on the same public origin as the browser session. The
+      // backend rejects bearer access until the owner explicitly enables it.
+      { source: "/mcp/:path*", destination: `${api}/mcp/:path*` },
+      { source: "/.well-known/:path*", destination: `${api}/.well-known/:path*` },
+      { source: "/oauth/:path*", destination: `${api}/oauth/:path*` },
+    ];
   },
 };
 

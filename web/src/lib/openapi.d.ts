@@ -4,6 +4,41 @@
  */
 
 export interface paths {
+    "/api/v1/integrations/mcp": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Mcp Integration */
+        get: operations["get_mcp_integration_api_v1_integrations_mcp_get"];
+        /** Save Mcp Integration */
+        put: operations["save_mcp_integration_api_v1_integrations_mcp_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/integrations/mcp/revoke": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Revoke Mcp Grant */
+        post: operations["revoke_mcp_grant_api_v1_integrations_mcp_revoke_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/health": {
         parameters: {
             query?: never;
@@ -1542,6 +1577,47 @@ export interface components {
             /** Password */
             password: string;
         };
+        /** McpGrantOut */
+        McpGrantOut: {
+            /** Id */
+            id: string;
+            /** Client Id */
+            client_id: string;
+            /** Client Name */
+            client_name: string;
+            /** Scopes */
+            scopes: string[];
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Last Used At */
+            last_used_at: string | null;
+            /** Refresh Expires At */
+            refresh_expires_at: string | null;
+        };
+        /** McpIntegrationInput */
+        McpIntegrationInput: {
+            /** Enabled */
+            enabled: boolean;
+        };
+        /** McpIntegrationOut */
+        McpIntegrationOut: {
+            /** Enabled */
+            enabled: boolean;
+            /** Direct Http Ready */
+            direct_http_ready: boolean;
+            /** Mcp Url */
+            mcp_url: string | null;
+            /** Grants */
+            grants?: components["schemas"]["McpGrantOut"][];
+        };
+        /** McpRevokeInput */
+        McpRevokeInput: {
+            /** Grant Id */
+            grant_id: string;
+        };
         /** NetworkInput */
         NetworkInput: {
             /** Public Url */
@@ -2056,6 +2132,111 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    get_mcp_integration_api_v1_integrations_mcp_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                openlab_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["McpIntegrationOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    save_mcp_integration_api_v1_integrations_mcp_put: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                openlab_csrf?: string | null;
+                openlab_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["McpIntegrationInput"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["McpIntegrationOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    revoke_mcp_grant_api_v1_integrations_mcp_revoke_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                openlab_csrf?: string | null;
+                openlab_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["McpRevokeInput"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     health_api_v1_health_get: {
         parameters: {
             query?: never;
