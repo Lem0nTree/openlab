@@ -95,11 +95,11 @@ func (e *Engine) Install(ctx context.Context, request Request) (any, error) {
 		return nil, err
 	}
 	e.progress("Pulling verified container images. This can take several minutes on a Raspberry Pi.")
-	if _, err = e.compose(ctx, 10*time.Minute, config, "pull"); err != nil {
+	if _, err = e.composeProgress(ctx, 10*time.Minute, config, "pull"); err != nil {
 		return nil, err
 	}
 	e.progress("Starting OpenLab services and applying the release database schema.")
-	if _, err = e.compose(ctx, 5*time.Minute, config, "up", "-d", "--no-build"); err != nil {
+	if _, err = e.composeProgress(ctx, 5*time.Minute, config, "up", "-d", "--no-build"); err != nil {
 		return nil, err
 	}
 	e.progress("Waiting for the server, web app, database, and worker to become ready.")
@@ -417,10 +417,12 @@ func (e *Engine) updateVersion(ctx context.Context, manualFeature bool, version 
 		if err := saveConfig(next); err != nil {
 			return err
 		}
-		if _, err := e.compose(ctx, 10*time.Minute, next, "pull"); err != nil {
+		e.progress("Pulling the verified update images. Docker progress will appear below.")
+		if _, err := e.composeProgress(ctx, 10*time.Minute, next, "pull"); err != nil {
 			return err
 		}
-		if _, err := e.compose(ctx, 5*time.Minute, next, "up", "-d", "--no-build", "--force-recreate"); err != nil {
+		e.progress("Starting updated OpenLab services and applying the release database schema.")
+		if _, err := e.composeProgress(ctx, 5*time.Minute, next, "up", "-d", "--no-build", "--force-recreate"); err != nil {
 			return err
 		}
 		report, err := e.waitReady(ctx)

@@ -43,6 +43,10 @@ only the host services; it never waits for you to fill in the browser wizard.
 If it reports a timeout, run `openlabctl doctor` for the named check rather
 than assuming that entering owner details will unblock it.
 
+While images are pulled or services start, sanitized Docker progress events are
+printed live to the terminal on stderr. The final installation result remains
+JSON on stdout so scripts and the scoped helper can parse it reliably.
+
 Open the URL printed by `setup-link` in a browser on the same trusted network.
 Its fragment contains the one-time owner setup token: treat the whole link as a
 secret. The browser removes the fragment from history and does not put it into
