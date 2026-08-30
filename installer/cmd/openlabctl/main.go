@@ -24,7 +24,9 @@ func main() { os.Exit(run()) }
 func run() int {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
-	engine := &control.Engine{Version: version, PublicKey: releasePublicKey}
+	engine := &control.Engine{Version: version, PublicKey: releasePublicKey, Progress: func(message string) {
+		fmt.Fprintln(os.Stderr, "OpenLab: "+message)
+	}}
 	if filepath.Base(os.Args[0]) == "openlabctl-helper" {
 		if len(os.Args) != 1 {
 			return 2

@@ -36,6 +36,13 @@ binary checksum, then installs the static CLI. The inspected bootstrap script
 and its embedded public key are the initial trust decision. Later downloads are
 verified by that key; unsigned or altered releases fail closed.
 
+During installation, the terminal reports fixed phases for release validation,
+local secret preparation, image pulling, service startup, and readiness. Image
+pulls can take several minutes on a Raspberry Pi. The readiness meter checks
+only the host services; it never waits for you to fill in the browser wizard.
+If it reports a timeout, run `openlabctl doctor` for the named check rather
+than assuming that entering owner details will unblock it.
+
 Open the URL printed by `setup-link` in a browser on the same trusted network.
 Its fragment contains the one-time owner setup token: treat the whole link as a
 secret. The browser removes the fragment from history and does not put it into

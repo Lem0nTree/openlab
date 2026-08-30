@@ -72,7 +72,9 @@ func CallHelper(ctx context.Context, request Request) (any, error) {
 	command.Stdin = bytes.NewReader(request.JSON())
 	output := &cappedBuffer{limit: 128 * 1024}
 	command.Stdout = output
-	command.Stderr = &cappedBuffer{limit: 4096}
+	// The helper emits only fixed lifecycle progress on stderr. Forward it so a
+	// normal terminal install remains observable while stdout stays strict JSON.
+	command.Stderr = os.Stderr
 	err := command.Run()
 	var response struct {
 		Result json.RawMessage `json:"result"`
