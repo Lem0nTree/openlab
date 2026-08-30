@@ -171,6 +171,22 @@ func (e *Engine) compose(ctx context.Context, timeout time.Duration, config Conf
 	return e.runner().Run(ctx, timeout, nil, "docker", append(base, args...)...)
 }
 
+func (e *Engine) composeProgress(ctx context.Context, timeout time.Duration, config Config, args ...string) ([]byte, error) {
+	// Compose's plain mode is stable over SSH/non-TTY sessions and exposes
+	// layer/service events that RunProgress can safely redact and forward.
+	for _, path := range []string{AppRoot + "/deploy/compose.yml", AppRoot + "/deploy/compose.installer.yml", ConfigRoot + "/network.yml", ConfigRoot + "/openlab.env"} {
+		if _, err := trustedFile(path); err != nil {
+			return nil, err
+		}
+	}
+	base := []string{"compose", "--progress", "plain", "--project-name", config.Project, "--env-file", ConfigRoot + "/openlab.env", "-f", AppRoot + "/deploy/compose.yml", "-f", AppRoot + "/deploy/compose.installer.yml", "-f", ConfigRoot + "/network.yml"}
+	runner := e.runner()
+	if progress, ok := runner.(ProgressRunner); ok {
+		return progress.RunProgress(ctx, timeout, nil, "docker", append(base, args...)...)
+	}
+	return runner.Run(ctx, timeout, nil, "docker", append(base, args...)...)
+}
+
 func (e *Engine) Plan(ctx context.Context, request Request) (Plan, Manifest, error) {
 	manifest, raw, err := e.fetch(ctx, request.Version)
 	if err != nil {
