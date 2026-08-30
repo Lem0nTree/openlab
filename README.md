@@ -94,6 +94,16 @@ Go to **Settings → Smart Inbox**, select a preset or compatible endpoint, choo
 
 See [Smart Inbox](docs/MVP1_SMART_INBOX.md), [item intelligence and BUILD](docs/ITEM_INTELLIGENCE.md), and [remaining scope](docs/REMAINING_FEATURES.md) for the exact current contract and roadmap.
 
+## Public resources and support
+
+- Website: [openlab.tools](https://openlab.tools)
+- [Terms and conditions](docs/TERMS.md)
+- [Privacy policy](docs/PRIVACY.md)
+- Support and commercial licensing: [support@openlab.tools](mailto:support@openlab.tools)
+
+OpenLab is an open-source, self-hosted project. The license below defines the
+permissions and conditions that apply to the source code and its distribution.
+
 ## Project map
 
 - `backend/` — FastAPI API, PostgreSQL worker, migrations, and tests
@@ -106,7 +116,7 @@ See [Smart Inbox](docs/MVP1_SMART_INBOX.md), [item intelligence and BUILD](docs/
 OpenLab is source-available under the [PolyForm Noncommercial License 1.0.0](LICENSE).
 You may use, modify, and share it for personal, hobby, research, educational, and other noncommercial purposes. You may not use OpenLab, modified versions, or services based on it for commercial purposes without a separate written license from Lemon Tree.
 
-Commercial use includes internal business use, paid services, hosted offerings, resale, consulting, and integrations offered for commercial advantage. To discuss a commercial license, contact the project owner before using OpenLab in a business.
+Commercial use includes internal business use, paid services, hosted offerings, resale, consulting, and integrations offered for commercial advantage. To discuss a commercial license, contact [support@openlab.tools](mailto:support@openlab.tools) before using OpenLab in a business.
 
 OpenLab is under active development. Contributions and honest field reports are welcome; by contributing, you agree that your contribution is available under this license.
 
