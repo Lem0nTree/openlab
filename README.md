@@ -101,7 +101,14 @@ See [Smart Inbox](docs/MVP1_SMART_INBOX.md), [item intelligence and BUILD](docs/
 - `deploy/` — Docker Compose, images, secret bootstrap, backup, and restore tools
 - `screen/` — current product screenshots
 
-OpenLab is under active development and licensed under [Apache 2.0](LICENSE). Contributions and honest field reports are welcome.
+## License and commercial use
+
+OpenLab is source-available under the [PolyForm Noncommercial License 1.0.0](LICENSE).
+You may use, modify, and share it for personal, hobby, research, educational, and other noncommercial purposes. You may not use OpenLab, modified versions, or services based on it for commercial purposes without a separate written license from Lemon Tree.
+
+Commercial use includes internal business use, paid services, hosted offerings, resale, consulting, and integrations offered for commercial advantage. To discuss a commercial license, contact the project owner before using OpenLab in a business.
+
+OpenLab is under active development. Contributions and honest field reports are welcome; by contributing, you agree that your contribution is available under this license.
 
 <p align="center">
   <strong>Own your lab data. Know your stock. Build more.</strong><br />
