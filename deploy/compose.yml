@@ -49,6 +49,8 @@ services:
     build:
       context: ..
       dockerfile: deploy/Dockerfile.backend
+      args:
+        OPENLAB_INSTALL_KICAD: ${OPENLAB_INSTALL_KICAD:-0}
     command: ["python", "-m", "openlab.worker"]
     environment:
       DATABASE_URL: ${DATABASE_URL:?set DATABASE_URL}

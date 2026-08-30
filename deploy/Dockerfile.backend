@@ -1,4 +1,10 @@
 FROM python:3.13-slim AS base
+ARG OPENLAB_INSTALL_KICAD=0
+RUN case "$OPENLAB_INSTALL_KICAD" in \
+      0) ;; \
+      1) apt-get update && apt-get install -y --no-install-recommends kicad && rm -rf /var/lib/apt/lists/* ;; \
+      *) echo "OPENLAB_INSTALL_KICAD must be 0 or 1" >&2; exit 1 ;; \
+    esac
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
 WORKDIR /app
 RUN pip install --no-cache-dir uv==0.6.3
