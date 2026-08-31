@@ -509,11 +509,24 @@ func (e *Engine) Tailscale(ctx context.Context, installDeps bool) (any, error) {
 		BackendState string `json:"BackendState"`
 		AuthURL      string `json:"AuthURL"`
 		Self         struct {
+			Online       bool     `json:"Online"`
 			TailscaleIPs []string `json:"TailscaleIPs"`
 			DNSName      string   `json:"DNSName"`
 		} `json:"Self"`
 	}
 	_ = json.Unmarshal(raw, &status)
+	// Existing reachable installations need no configuration rewrite or web restart.
+	if status.BackendState == "Running" && status.Self.Online && len(status.Self.TailscaleIPs) > 0 {
+		existing := config
+		existing.TailscaleIP = status.Self.TailscaleIPs[0]
+		if existing.Validate() == nil {
+			endpoint := fmt.Sprintf("http://%s:%d", existing.TailscaleIP, existing.Port)
+			if tailscaleWebReady(ctx, endpoint) {
+				e.progress("OpenLab is already reachable over Tailscale; no restart needed")
+				return map[string]string{"status": "connected", "url": endpoint}, nil
+			}
+		}
+	}
 	if status.BackendState != "Running" {
 		e.progress("Waiting for Tailscale authorization")
 		_, _ = e.runner().Run(ctx, 20*time.Second, nil, "tailscale", "up", "--timeout=10s")
@@ -552,6 +565,20 @@ func (e *Engine) Tailscale(ctx context.Context, installDeps bool) (any, error) {
 	}
 	_ = e.publishStatus(report, "connected", "")
 	return map[string]string{"status": "connected", "url": fmt.Sprintf("http://%s:%d", strings.TrimSuffix(status.Self.DNSName, "."), config.Port)}, nil
+}
+
+func tailscaleWebReady(ctx context.Context, endpoint string) bool {
+	client := &http.Client{Timeout: 5 * time.Second, CheckRedirect: func(_ *http.Request, _ []*http.Request) error { return http.ErrUseLastResponse }}
+	request, err := http.NewRequestWithContext(ctx, "GET", endpoint+"/api/v1/health", nil)
+	if err != nil {
+		return false
+	}
+	response, err := client.Do(request)
+	if err != nil {
+		return false
+	}
+	defer response.Body.Close()
+	return response.StatusCode == http.StatusOK
 }
 
 func (e *Engine) installTimers(ctx context.Context) error {

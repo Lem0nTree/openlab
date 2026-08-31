@@ -6,6 +6,7 @@ import { api, type Job, type LabSettings, type McpIntegration, type ProviderConf
 import { connectOnboardingProvider, initialSetupStep, openRouterEndpoint, openRouterFreeModel, readinessLabel, readinessStep, setupSteps, type InstallationOverview, type InstallationPolicy, type NetworkSettings, type OnboardingState } from "@/lib/onboarding";
 import styles from "./onboarding.module.css";
 import { OnboardingHostSetup } from "./onboarding-host-setup";
+import { McpConnection } from "./mcp-connection";
 
 async function loadSetup() {
   const [next, settings, install, integration] = await Promise.all([
@@ -29,7 +30,6 @@ export function Onboarding() {
   const [name, setName] = useState("");
   const [units, setUnits] = useState<"metric" | "imperial">("metric");
   const [url, setUrl] = useState("");
-  const [secureBrowser, setSecureBrowser] = useState(false);
   const [provider, setProvider] = useState<ProviderConfig | null>(null);
   const [endpoint, setEndpoint] = useState("");
   const [model, setModel] = useState("");
@@ -55,7 +55,6 @@ export function Onboarding() {
         setState(next); setOverview(settings); setInstallation(install);
         setStep(initialSetupStep(next)); setName(settings.lab.name); setUnits(settings.lab.units);
         setUrl(next.network.public_url ?? window.location.origin); setPolicy(install.policy);
-        setSecureBrowser(window.location.protocol === "https:");
         setKicad(settings.kicad.cli_path ?? ""); setProvider(ai);
         setEndpoint(ai?.base_url ?? ""); setModel(ai?.model ?? ""); setMcp(integration);
       }).catch((failure: Error) => { if (!cancelled) setError(failure.message); });
@@ -208,17 +207,8 @@ export function Onboarding() {
       {step === 5 && <>
         <p className="eyebrow">06 · OPTIONAL PRODUCT MCP</p><h2>Bring your lab into your AI tools.</h2>
         <p>Product MCP lets an approved AI client work with your lab records. It is separate from the installer MCP: it does not install software, run shell commands, or expose provider keys. You choose permissions during authorization.</p>
-        <p className={styles.status}>Status: <strong>{!mcp?.enabled ? "Disabled" : mcp.grants?.some((grant) => grant.last_used_at) ? "Enabled · client use recorded" : mcp.grants?.length ? "Enabled · client authorized, not yet used" : "Enabled · waiting for client authorization"}</strong></p>
-        <div className={styles.actions}><button type="button" disabled={busy || !!mcp?.enabled} onClick={() => void run(async () => { setMcp(await api<McpIntegration>("/integrations/mcp", { method: "PUT", body: JSON.stringify({ enabled: true }) })); setMessage("Product MCP enabled. Add the endpoint in your AI client, then authorize it. Enabling alone does not connect a client."); })}>{mcp?.enabled ? "Product MCP enabled" : "Enable Product MCP"}</button><button type="button" className="secondary-button" disabled={busy} onClick={() => void run(async () => { setMcp(await api<McpIntegration>("/integrations/mcp")); })}>Check client connection</button></div>
-        {mcp?.direct_http_ready && mcp.mcp_url ? <div className={styles.guide}><h3>Connect your AI client</h3><ol><li>Add a remote MCP server in a client that supports Streamable HTTP and OAuth.</li><li>Use this server URL, then sign in to OpenLab in the authorization window.</li><li>Review the requested scopes and approve only the access you want to grant.</li></ol><code className={styles.command}>{mcp.mcp_url}</code><button type="button" className="secondary-button" disabled={busy} onClick={() => void run(() => copy(mcp.mcp_url!))}>Copy MCP server URL</button></div> : <>
-          <OnboardingHostSetup kind="https" managed={!!installation?.managed} />
-          <div className={styles.actions}>{secureBrowser && <button type="button" className="secondary-button" disabled={busy} onClick={() => void run(async () => {
-            if (window.location.protocol !== "https:") throw new Error("Open the secure HTTPS address first, sign in, and return to this step.");
-            const saved = await api<NetworkSettings>("/settings/network", { method: "PUT", body: JSON.stringify({ public_url: window.location.origin }) });
-            if (!saved.verified) throw new Error("This address could not be verified. Check your reverse proxy and try again.");
-            setUrl(saved.public_url ?? window.location.origin); setMessage("Secure lab address verified. You can now add the MCP URL to your client.");
-          })}>Use this HTTPS address</button>}<button type="button" className="secondary-button" disabled={busy} onClick={() => navigate(1)}>Configure another address</button></div>
-        </>}
+        <div className={styles.actions}><button type="button" disabled={busy || !!mcp?.enabled} onClick={() => void run(async () => { setMcp(await api<McpIntegration>("/integrations/mcp", { method: "PUT", body: JSON.stringify({ enabled: true }) })); setMessage("Product MCP enabled. Add the endpoint in your AI client, then authorize it. Enabling alone does not connect a client."); })}>{mcp?.enabled ? "Product MCP enabled" : "Enable Product MCP"}</button></div>
+        <McpConnection integration={mcp} onChange={setMcp} returnTo="/onboarding" />
         {!!mcp?.grants?.length && <ul className={styles.grants}>{mcp.grants?.map((grant) => <li key={grant.id}><strong>{grant.client_name}</strong><span>{grant.scopes.join(", ")} · {grant.last_used_at ? `Last used ${new Date(grant.last_used_at).toLocaleString()}` : "Authorized, not yet used"}</span></li>)}</ul>}
         <p className={styles.note}>Manage permissions or revoke clients in <Link href="/settings#mcp">Settings → MCP integrations</Link>. Skipping leaves your current MCP settings unchanged.</p>
         <div className={styles.actions}><button type="button" disabled={busy} onClick={() => navigate(readinessStep)}>{mcp?.enabled ? "Continue to readiness" : "Skip for now"}</button></div>

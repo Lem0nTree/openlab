@@ -15,11 +15,21 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"net/http"
 	"os"
 	"strings"
 	"testing"
 	"time"
 )
+
+type readyTailnetTransport struct{}
+
+func (readyTailnetTransport) RoundTrip(request *http.Request) (*http.Response, error) {
+	if request.URL.String() != "http://100.98.72.44:3000/api/v1/health" {
+		return nil, errors.New("unexpected endpoint")
+	}
+	return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(`{"status":"ok"}`)), Header: make(http.Header)}, nil
+}
 
 // These tests use real fixed-path root-owned state in a disposable container,
 // with fault-injected Docker/network boundaries. They never mount a Docker socket.
@@ -150,6 +160,32 @@ func TestDisposableLifecycle(t *testing.T) {
 			if before[key] != after[key] {
 				t.Fatalf("rotated %s", key)
 			}
+		}
+	})
+	t.Run("existing Tailscale access does not rewrite or restart", func(t *testing.T) {
+		configBefore, err := os.ReadFile(ConfigRoot + "/installation.json")
+		if err != nil {
+			t.Fatal(err)
+		}
+		networkBefore, err := os.ReadFile(ConfigRoot + "/network.yml")
+		if err != nil {
+			t.Fatal(err)
+		}
+		transport := http.DefaultTransport
+		http.DefaultTransport = readyTailnetTransport{}
+		defer func() { http.DefaultTransport = transport }()
+		r := &setupRunner{output: `{"BackendState":"Running","Self":{"Online":true,"TailscaleIPs":["100.98.72.44"]}}`}
+		e := &Engine{Runner: r}
+		if _, err := e.Tailscale(ctx, true); err != nil {
+			t.Fatal(err)
+		}
+		if len(r.calls) != 1 || r.calls[0] != "tailscale status --json" {
+			t.Fatalf("unexpected mutation: %v", r.calls)
+		}
+		configAfter, _ := os.ReadFile(ConfigRoot + "/installation.json")
+		networkAfter, _ := os.ReadFile(ConfigRoot + "/network.yml")
+		if !bytes.Equal(configBefore, configAfter) || !bytes.Equal(networkBefore, networkAfter) {
+			t.Fatal("existing configuration changed")
 		}
 	})
 	t.Run("changed plan refuses before mutation", func(t *testing.T) {

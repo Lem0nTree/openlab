@@ -14,10 +14,11 @@ const tailnetLabels: Record<string, string> = {
   needs_authorization: "Tailscale needs sign-in or device approval", unavailable: "Host connection not verified",
 };
 
-export function OnboardingHostSetup({ kind, managed, onConnected }: {
+export function OnboardingHostSetup({ kind, managed, onConnected, returnTo = "/onboarding" }: {
   kind: "kicad" | "tailscale" | "https";
   managed: boolean;
   onConnected?: () => Promise<void>;
+  returnTo?: "/onboarding" | "/settings#mcp";
 }) {
   const [host, setHost] = useState<HostStatus | null>(null);
   const [pending, setPending] = useState<Operation | null>(null);
@@ -72,14 +73,15 @@ export function OnboardingHostSetup({ kind, managed, onConnected }: {
     } finally { starting.current = false; if (alive.current) setWaiting(false); }
   }
   const title = kind === "kicad" ? "Install the KiCad worker" : kind === "https" ? "Enable private HTTPS" : "Connect your existing Tailscale host";
-  const label = kind === "kicad" ? "Install KiCad & connect" : kind === "https" ? "Enable HTTPS with Tailscale" : host?.tailscale === "connected" ? "Connect OpenLab to Tailscale" : "Install / connect Tailscale";
+  const alreadyConnected = kind === "tailscale" && host?.available && host.tailscale === "connected";
+  const label = kind === "kicad" ? "Install KiCad & connect" : kind === "https" ? "Enable HTTPS with Tailscale" : alreadyConnected ? "Already connected" : "Install / connect Tailscale";
   return <div className={styles.toolPanel}>
     <div className={styles.toolHeading}><h3>{title}</h3><span className={styles.optionalBadge}>Optional</span></div>
     <p>{kind === "kicad" ? "Downloads the release’s verified KiCad worker, restarts only that worker, and checks the executable. No build on your Pi and no change to your inventory." : kind === "https" ? "Tailscale Serve supplies a trusted HTTPS certificate for your private lab address. Your lab stays inside your tailnet; public Funnel is never enabled." : "Checks Tailscale on the Pi itself. An existing installation is reused; OpenLab installs it only when it is missing."}</p>
     {kind !== "kicad" && <p className={styles.status} role="status"><span className={styles.statusDot} data-connected={host?.available && host.tailscale === "connected"} />{host === null ? "Checking the host…" : tailnetLabels[host.available ? host.tailscale ?? "unavailable" : "unavailable"]}</p>}
     {host?.available ? <>
       <div className={styles.actions}>
-        <button type="button" disabled={!!busy || (kind === "kicad" && !host.kicad_supported)} onClick={() => void start(kind)}>{busy && ownOperation ? <><span className={styles.spinner} aria-hidden="true" />Working…</> : label}</button>
+        <button type="button" disabled={!!busy || !!alreadyConnected || (kind === "kicad" && !host.kicad_supported)} onClick={() => void start(kind)}>{busy && ownOperation ? <><span className={styles.spinner} aria-hidden="true" />Working…</> : label}</button>
         {kind !== "kicad" && <button type="button" className="secondary-button" disabled={!!busy} onClick={() => void start("refresh")}>Refresh host status</button>}
       </div>
       {kind === "kicad" && !host.kicad_supported && <p className={styles.note}>This older release has no signed KiCad worker. Upgrade through the signed installer to enable this button.</p>}
@@ -88,9 +90,10 @@ export function OnboardingHostSetup({ kind, managed, onConnected }: {
     {error && <p className={styles.error} role="alert">{error}</p>}
     {kind === "https" && <>
       <p className={styles.note}>You may need to allow HTTPS in <a href="https://login.tailscale.com/admin/dns" target="_blank" rel="noreferrer">Tailscale DNS settings</a>. Certificate issuance publishes your machine’s DNS name in certificate transparency logs.</p>
-      {host?.operation?.action === "https" && host.operation.status === "completed" && host.operation.url && <div className={styles.guide}><strong>Your secure address is ready</strong><p>Open this address, sign in, then choose “Use this HTTPS address” in the Product MCP step.</p><a className={styles.buttonLink} href={`${host.operation.url}/onboarding`}>Open secure setup ↗</a></div>}
+      {host?.operation?.action === "https" && host.operation.status === "completed" && host.operation.url && <div className={styles.guide}><strong>Your secure address is ready</strong><p>Open this address, sign in, then choose “Use this HTTPS address”.</p><a className={styles.buttonLink} href={`${host.operation.url}${returnTo}`}>Open secure setup ↗</a></div>}
       <p className={styles.note}>Only clients that can reach your tailnet can connect. A cloud MCP client may require a separately configured public HTTPS endpoint.</p>
     </>}
-    {kind === "tailscale" && <p className={styles.note}>If sign-in is required, run <code>sudo tailscale up</code> in your Pi terminal and approve the device. Login links and credentials never enter this page.</p>}
+    {alreadyConnected && <p className={styles.note}>Your host is already on Tailscale. No installation or web restart is needed; continue to the next step. This confirms the host connection, not whether a particular AI client can reach OpenLab.</p>}
+    {kind === "tailscale" && !alreadyConnected && <p className={styles.note}>If sign-in is required, run <code>sudo tailscale up</code> in your Pi terminal and approve the device. Login links and credentials never enter this page.</p>}
   </div>;
 }

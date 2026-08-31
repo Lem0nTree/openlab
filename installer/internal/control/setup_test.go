@@ -4,12 +4,35 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 )
+
+func TestTailscaleReadinessDoesNotAcceptRedirectsOrErrors(t *testing.T) {
+	for _, code := range []int{200, 307, 401, 503} {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path != "/api/v1/health" {
+				t.Errorf("unexpected route: %s", r.URL.Path)
+			}
+			w.Header().Set("Location", "/login")
+			w.WriteHeader(code)
+		}))
+		if got := tailscaleWebReady(context.Background(), server.URL); got != (code == 200) {
+			t.Errorf("status %d: ready=%v", code, got)
+		}
+		server.Close()
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if tailscaleWebReady(ctx, "http://127.0.0.1:1") {
+		t.Fatal("cancelled probe accepted")
+	}
+}
 
 type setupRunner struct {
 	output string
