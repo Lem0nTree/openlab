@@ -71,6 +71,7 @@ from .mcp_server import product_mcp
 from .models import (
     Allocation,
     Capability,
+    CommunicationConsent,
     InboxCandidate,
     InboxItem,
     Job,
@@ -88,6 +89,8 @@ from .models import (
     StockBalance,
     StockMovement,
     TechnicalFact,
+    TelemetryOutbox,
+    TelemetryState,
     Thing,
     ThingAlias,
     ThingInterface,
@@ -135,6 +138,7 @@ from .schemas import (
     McpIntegrationInput,
     McpIntegrationOut,
     McpRevokeInput,
+    NewsletterSettingsInput,
     PinOut,
     PinoutReplace,
     ProjectCreate,
@@ -153,6 +157,8 @@ from .schemas import (
     StockMovementDetailOut,
     StockMovementOut,
     StockMutation,
+    TelemetrySettingsInput,
+    TelemetrySettingsOut,
     ThingCreate,
     ThingKnowledgeReplace,
     ThingOut,
@@ -178,6 +184,7 @@ from .services import (
     save_upload,
 )
 from .system_settings import effective_kicad_cli, normalize_kicad_cli
+from .telemetry import DISCLOSURE_VERSION, ensure_state, queue_outbox, queue_preference
 
 settings = get_settings()
 bootstrap_token = settings.setup_token or token_urlsafe(24)
@@ -590,6 +597,17 @@ def setup(payload: SetupRequest, response: Response, db: Session = Depends(get_d
     db.add_all([lab, owner])
     db.flush()
     db.add(Membership(lab_id=lab.id, user_id=owner.id, role="owner"))
+    consent = CommunicationConsent(
+        user_id=owner.id,
+        newsletter_opt_in=payload.newsletter_opt_in,
+        notice_version=DISCLOSURE_VERSION,
+        consented_at=datetime.now(UTC) if payload.newsletter_opt_in else None,
+        status="pending_delivery" if payload.newsletter_opt_in else "not_subscribed",
+    )
+    db.add(consent)
+    db.flush()
+    if payload.newsletter_opt_in and consent.consented_at:
+        queue_outbox(db, "subscribe", f"subscribe:{consent.id}:{int(consent.consented_at.timestamp())}", consent_id=consent.id)
     raw, csrf = create_session(db, owner)
     db.commit()
     set_session_cookies(response, raw, csrf)
@@ -656,6 +674,91 @@ def get_settings_overview(
     return settings_overview_out(db, value)
 
 
+def telemetry_settings_out(db: Session, user: User) -> TelemetrySettingsOut:
+    try:
+        state = ensure_state(db, settings)
+    except ProviderError as exc:
+        raise HTTPException(status_code=409, detail="Telemetry identity needs a valid encryption key") from exc
+    consent = db.scalar(select(CommunicationConsent).where(CommunicationConsent.user_id == user.id))
+    pending = db.scalar(select(func.count(TelemetryOutbox.id)).where(
+        TelemetryOutbox.status == "queued"
+    )) or 0
+    return TelemetrySettingsOut(
+        usage_enabled=state.usage_enabled,
+        installation_id=state.installation_id,
+        disclosure_version=state.disclosure_version,
+        onboarding_seen_at=state.onboarding_seen_at,
+        last_reported_day=state.last_reported_day,
+        pending_delivery_count=int(pending),
+        newsletter_status=consent.status if consent else "not_subscribed",
+    )
+
+
+@app.get("/api/v1/settings/telemetry", response_model=TelemetrySettingsOut)
+def get_telemetry_settings(user: User = Depends(require_owner), db: Session = Depends(get_db)) -> TelemetrySettingsOut:
+    return telemetry_settings_out(db, user)
+
+
+@app.put("/api/v1/settings/telemetry", response_model=TelemetrySettingsOut,
+         dependencies=[Depends(require_csrf)])
+def save_telemetry_settings(payload: TelemetrySettingsInput, user: User = Depends(require_owner),
+                            db: Session = Depends(get_db)) -> TelemetrySettingsOut:
+    state = ensure_state(db, settings)
+    state.usage_enabled = payload.usage_enabled
+    if not payload.usage_enabled:
+        state.last_queued_day = datetime.now(UTC) - timedelta(days=1)
+        for item in db.scalars(select(TelemetryOutbox).where(
+            TelemetryOutbox.kind == "activity", TelemetryOutbox.status == "queued"
+        )).all():
+            item.status = "cancelled"
+    queue_preference(db, state)
+    audit(db, user, "telemetry.preference_updated", "installation", state.id, usage_enabled=payload.usage_enabled)
+    db.commit()
+    return telemetry_settings_out(db, user)
+
+
+@app.delete("/api/v1/settings/telemetry/history", status_code=202,
+            dependencies=[Depends(require_csrf)])
+def delete_telemetry_history(user: User = Depends(require_owner), db: Session = Depends(get_db)) -> dict[str, str]:
+    state = ensure_state(db, settings)
+    queue_outbox(db, "history_delete", f"history-delete:{state.installation_id}:{int(datetime.now(UTC).timestamp())}")
+    audit(db, user, "telemetry.history_delete_requested", "installation", state.id)
+    db.commit()
+    return {"status": "queued"}
+
+
+@app.put("/api/v1/settings/communications", response_model=TelemetrySettingsOut,
+         dependencies=[Depends(require_csrf)])
+def save_communications(payload: NewsletterSettingsInput, user: User = Depends(require_owner),
+                        db: Session = Depends(get_db)) -> TelemetrySettingsOut:
+    consent = db.scalar(select(CommunicationConsent).where(CommunicationConsent.user_id == user.id))
+    if consent is None:
+        consent = CommunicationConsent(user_id=user.id, notice_version=DISCLOSURE_VERSION)
+        db.add(consent)
+        db.flush()
+    consent.newsletter_opt_in = payload.newsletter_opt_in
+    consent.notice_version = DISCLOSURE_VERSION
+    if payload.newsletter_opt_in:
+        consent.consented_at = datetime.now(UTC)
+        consent.status = "pending_delivery"
+        queue_outbox(db, "subscribe", f"subscribe:{consent.id}:{int(consent.consented_at.timestamp())}", consent_id=consent.id)
+    else:
+        pending_subscribes = db.scalars(select(TelemetryOutbox).where(
+            TelemetryOutbox.consent_id == consent.id, TelemetryOutbox.kind == "subscribe",
+            TelemetryOutbox.status == "queued",
+        )).all()
+        for item in pending_subscribes:
+            item.status = "cancelled"
+        if consent.subscription_token_ciphertext:
+            consent.status = "pending_unsubscribe"
+            queue_outbox(db, "unsubscribe", f"unsubscribe:{consent.id}:{int(datetime.now(UTC).timestamp())}", consent_id=consent.id)
+        else:
+            consent.status = "not_subscribed"
+    audit(db, user, "communication.newsletter_updated", "user", user.id, newsletter_opt_in=payload.newsletter_opt_in)
+    db.commit()
+    return telemetry_settings_out(db, user)
+
+
 def owner_lab(db: Session, user: User) -> Lab:
     value = db.get(Lab, lab_for_user(db, user))
     if value is None:
@@ -688,6 +791,9 @@ def complete_onboarding(user: User = Depends(require_owner),
     if report.overall == "blocked":
         raise HTTPException(status_code=409, detail="Required checks have not passed; refresh readiness and fix the listed errors")
     value.onboarding_completed_at = datetime.now(UTC)
+    state = db.get(TelemetryState, "installation")
+    if state:
+        state.onboarding_seen_at = datetime.now(UTC)
     audit(db, user, "installation.onboarding_completed", "lab", value.id)
     db.commit()
     return OnboardingOut(completed_at=value.onboarding_completed_at,

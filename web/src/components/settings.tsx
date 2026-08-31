@@ -2,7 +2,7 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import Link from "next/link";
-import { api, type Job, type KicadSettings, type LabSettings, type McpIntegration, type ProviderConfig, type SettingsOverview } from "@/lib/api";
+import { api, type Job, type KicadSettings, type LabSettings, type McpIntegration, type ProviderConfig, type SettingsOverview, type TelemetrySettings } from "@/lib/api";
 import { Shell } from "./shell";
 import { McpConnection } from "./mcp-connection";
 
@@ -32,6 +32,7 @@ export function Settings() {
   const [loading, setLoading] = useState(true);
   const [checkingKicad, setCheckingKicad] = useState(false);
   const [mcp, setMcp] = useState<McpIntegration | null>(null);
+  const [telemetry, setTelemetry] = useState<TelemetrySettings | null>(null);
 
   function applyOverview(value: SettingsOverview) {
     setOverview(value);
@@ -45,8 +46,8 @@ export function Settings() {
   }
 
   useEffect(() => {
-    Promise.all([api<ProviderConfig | null>("/ai/provider"), api<SettingsOverview>("/settings"), api<McpIntegration>("/integrations/mcp")])
-      .then(([provider, settings, integration]) => {
+    Promise.all([api<ProviderConfig | null>("/ai/provider"), api<SettingsOverview>("/settings"), api<McpIntegration>("/integrations/mcp"), api<TelemetrySettings>("/settings/telemetry")])
+      .then(([provider, settings, integration, telemetrySettings]) => {
         setConfig(provider);
         setBaseUrl(provider?.base_url ?? "");
         setModel(provider?.model ?? "");
@@ -55,6 +56,7 @@ export function Settings() {
         setEmbeddingsEnabled(provider?.embeddings_enabled ?? false);
         applyOverview(settings);
         setMcp(integration);
+        setTelemetry(telemetrySettings);
       })
       .catch((e: Error) => setError(e.message))
       .finally(() => setLoading(false));
@@ -133,6 +135,24 @@ export function Settings() {
     catch (e) { setError((e as Error).message); }
   }
 
+  async function saveTelemetry(usageEnabled: boolean) {
+    clearFeedback();
+    try { const saved = await api<TelemetrySettings>("/settings/telemetry", { method: "PUT", body: JSON.stringify({ usage_enabled: usageEnabled }) }); setTelemetry(saved); setMessage(usageEnabled ? "Daily usage sharing is enabled." : "Daily usage sharing is disabled."); }
+    catch (e) { setError((e as Error).message); }
+  }
+
+  async function saveNewsletter(newsletterOptIn: boolean) {
+    clearFeedback();
+    try { const saved = await api<TelemetrySettings>("/settings/communications", { method: "PUT", body: JSON.stringify({ newsletter_opt_in: newsletterOptIn }) }); setTelemetry(saved); setMessage(newsletterOptIn ? "Newsletter preference saved; delivery is queued." : "Newsletter preference removed."); }
+    catch (e) { setError((e as Error).message); }
+  }
+
+  async function deleteTelemetryHistory() {
+    clearFeedback();
+    try { await api<void>("/settings/telemetry/history", { method: "DELETE" }); setMessage("Telemetry history deletion is queued."); }
+    catch (e) { setError((e as Error).message); }
+  }
+
   const kicad = overview?.kicad;
   return <Shell title="Settings"><div className="settings-layout">
     <aside className="settings-nav"><p className="nav-label">SETTINGS</p><Link href="/onboarding">Setup & readiness</Link><a href="#lab">Lab</a><a href="#smart-inbox">Smart Inbox</a><a href="#mcp">MCP integrations</a><a href="#kicad">KiCad</a><a href="#privacy">Privacy and data</a><a href="#deployment">Deployment</a></aside>
@@ -145,7 +165,7 @@ export function Settings() {
 
       <section className="settings-section" id="kicad"><div className="section-heading"><div><p className="eyebrow">KICAD</p><h2>Electrical rules check</h2></div><span className={`settings-state ${kicad?.check_status === "available" ? "is-on" : ""}`}>{kicad?.check_status?.replaceAll("_", " ") ?? "Unknown"}</span></div><p className="settings-copy">The command must exist inside the worker container. OpenLab’s standard Raspberry Pi image stays lightweight and does not install KiCad.</p><form className="settings-form" onSubmit={saveKicad}><label>Worker command or path<input value={kicadPath} onChange={(event) => setKicadPath(event.target.value)} placeholder="kicad-cli or /usr/bin/kicad-cli" maxLength={500} /></label><div className="settings-actions"><button disabled={loading || checkingKicad}>{checkingKicad ? "Checking…" : "Save and check"}</button><button type="button" className="secondary-button" disabled={checkingKicad} onClick={() => void checkKicad()}>Check again</button></div></form><div className="settings-fact"><span>Effective command</span><strong>{kicad?.effective_cli ?? "Not configured"}</strong></div><div className="settings-fact"><span>Configuration source</span><strong>{kicad?.source === "settings" ? "Settings override" : kicad?.source === "environment" ? "OPENLAB_KICAD_CLI" : "None"}</strong></div>{kicad?.version && <p className="settings-note">Worker detected {kicad.version}.</p>}{kicad?.error && <p className="settings-warning">{kicad.error}</p>}</section>
 
-      <section className="settings-section" id="privacy"><p className="eyebrow">PRIVACY AND DATA</p><h2>Where data goes</h2><p className="settings-copy">OpenLab stores inventory and normalized capture evidence locally. Raw images, recordings, email files, and PDFs are deleted after processing.</p><div className="settings-fact"><span>Raw capture media</span><strong>Temporary until processing completes</strong></div><div className="settings-fact"><span>Inventory writes</span><strong>Only after human confirmation</strong></div></section>
+      <section className="settings-section" id="privacy"><p className="eyebrow">PRIVACY AND DATA</p><h2>Where data goes</h2><p className="settings-copy">OpenLab stores inventory and normalized capture evidence locally. Raw images, recordings, email files, and PDFs are deleted after processing.</p><div className="settings-fact"><span>Raw capture media</span><strong>Temporary until processing completes</strong></div><div className="settings-fact"><span>Inventory writes</span><strong>Only after human confirmation</strong></div>{telemetry && <><h3>Usage telemetry</h3><p className="settings-copy">When enabled, OpenLab sends a stable pseudonymous installation ID, version, platform, and daily aggregate counts to telemetry.openlab.tools. Inventory, captures, account email, and provider settings stay local.</p><label className="check-row"><input type="checkbox" checked={telemetry.usage_enabled} onChange={(event) => void saveTelemetry(event.target.checked)} /> Share privacy-preserving daily usage data</label><div className="settings-fact"><span>Installation ID</span><code>{telemetry.installation_id}</code></div><div className="settings-fact"><span>Last daily report</span><strong>{telemetry.last_reported_day ? new Date(telemetry.last_reported_day).toLocaleDateString() : "Not delivered yet"}</strong></div><div className="settings-fact"><span>Queued deliveries</span><strong>{telemetry.pending_delivery_count}</strong></div><div className="settings-actions"><button type="button" className="secondary-button" onClick={() => void deleteTelemetryHistory()}>Request telemetry history deletion</button></div><h3>OpenLab updates</h3><label className="check-row"><input type="checkbox" checked={telemetry.newsletter_status === "subscribed" || telemetry.newsletter_status === "pending_delivery"} onChange={(event) => void saveNewsletter(event.target.checked)} /> Receive occasional OpenLab product updates</label><p className="settings-copy">Status: {telemetry.newsletter_status.replaceAll("_", " ")}. This preference is separate from usage telemetry.</p></>}</section>
 
       <section className="settings-section" id="deployment"><p className="eyebrow">DEPLOYMENT</p><h2>Environment variables</h2><p className="settings-copy">These values come from the repository’s root <code>.env</code> or Compose configuration. Secrets are never returned to the browser. Deployment-managed changes require recreating the affected service.</p><div className="environment-list">{overview?.environment.map((variable) => <div className="environment-row" key={variable.name}><div><code>{variable.name}</code><p>{variable.description}</p></div><div className="environment-value"><strong>{variable.secret ? variable.status === "configured" ? "Configured · redacted" : variable.status.replaceAll("_", " ") : variable.value ?? variable.status.replaceAll("_", " ")}</strong><small>{variable.editable ? "Settings override available" : variable.restart_required ? "Restart required" : "Applies immediately"}</small></div></div>)}</div></section>
 

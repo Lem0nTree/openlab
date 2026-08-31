@@ -36,6 +36,7 @@
 .card label { display: grid; gap: 8px; min-width: 0; line-height: 1.5; font-size: 14px; color: #b7c1bb; }
 .card input:not([type="checkbox"]), .card select { width: 100%; min-width: 0; min-height: 46px; border: 1px solid var(--line-bright); border-radius: 9px; background: var(--panel-2); color: var(--ink); padding: 11px 13px; }
 .card input[type="checkbox"] { width: 18px; height: 18px; min-height: 18px; flex: 0 0 18px; margin: 0; }
+.telemetryToggle { display: flex!important; align-items: center; gap: 10px; cursor: pointer; color: var(--ink)!important; font-weight: 650; }
 .page button, .buttonLink { min-height: 44px; cursor: pointer; }
 .card button, .buttonLink { display: inline-flex; align-items: center; justify-content: center; padding: 11px 16px; border: 1px solid transparent; border-radius: 9px; background: var(--accent); color: #10170b; font-size: 14px; font-weight: 650; line-height: 1.4; text-align: center; }
 .card button:global(.secondary-button) { color: var(--ink); border-color: var(--line-bright); background: var(--panel-2); }

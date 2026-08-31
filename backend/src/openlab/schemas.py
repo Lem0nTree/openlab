@@ -19,6 +19,25 @@ class SetupRequest(BaseModel):
     email: str = Field(min_length=3, max_length=320)
     password: str = Field(min_length=12, max_length=256)
     display_name: str = Field(min_length=1, max_length=120)
+    newsletter_opt_in: bool = False
+
+
+class TelemetrySettingsInput(StrictInput):
+    usage_enabled: bool
+
+
+class TelemetrySettingsOut(BaseModel):
+    usage_enabled: bool
+    installation_id: str
+    disclosure_version: str
+    onboarding_seen_at: datetime | None
+    last_reported_day: datetime | None
+    pending_delivery_count: int
+    newsletter_status: str
+
+
+class NewsletterSettingsInput(StrictInput):
+    newsletter_opt_in: bool
 
 
 class LoginRequest(BaseModel):

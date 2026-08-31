@@ -117,8 +117,11 @@ either installation path directly to an untrusted network.
    your MCP client, and authorize it in the browser. Enablement is distinct from
    client authorization and recorded use. See [Product MCP](PRODUCT_MCP.md).
 8. **Readiness:** fix any required failures, or finish with clearly identified
-   optional warnings. The page refreshes checks while open; no external ping or
-   telemetry is sent.
+   optional warnings. The page refreshes checks while open. Production installations
+   register once with OpenLab's telemetry endpoint; after this recap, the default-on
+   telemetry setting sends a daily pseudonymous aggregate, including zero-activity days.
+   It never includes inventory, captures, lab names, email addresses, or provider settings.
+   Change or delete telemetry history later in **Settings → Privacy and data**.
 
 Saved configuration survives page reloads. Return through **Settings → Setup &
 readiness** at any time. The wizard never stores provider keys or bootstrap tokens

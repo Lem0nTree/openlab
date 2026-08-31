@@ -25,6 +25,8 @@ from .providers import ProviderError
 from .schematics import propose_schematic
 from .services import cleanup_expired_attachments, process_inbox_item
 from .system_settings import check_kicad_cli, effective_kicad_cli
+from .telemetry import deliver_one as deliver_telemetry
+from .telemetry import schedule as schedule_telemetry
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 logger = logging.getLogger("openlab.worker")
@@ -152,13 +154,26 @@ def heartbeat_loop(stop: threading.Event) -> None:
 def worker_loop() -> None:
     logger.info("OpenLab worker started")
     next_cleanup = datetime.now(UTC)
+    next_telemetry = datetime.now(UTC)
     while True:
         if datetime.now(UTC) >= next_cleanup:
             cleanup_artifacts()
             next_cleanup = datetime.now(UTC) + timedelta(hours=1)
+        if datetime.now(UTC) >= next_telemetry:
+            try:
+                with SessionLocal.begin() as db:
+                    schedule_telemetry(db)
+            except SQLAlchemyError:
+                logger.warning("Telemetry scheduling could not reach the database")
+            next_telemetry = datetime.now(UTC) + timedelta(minutes=5)
+        try:
+            with SessionLocal.begin() as db:
+                delivered = deliver_telemetry(db)
+        except SQLAlchemyError:
+            delivered = False
         job = claim_one()
         if job is None:
-            time.sleep(2)
+            time.sleep(0.2 if delivered else 2)
         else:
             run_job(job.id)
 

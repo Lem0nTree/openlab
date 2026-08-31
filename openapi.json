@@ -539,6 +539,308 @@
         }
       }
     },
+    "/api/v1/settings/telemetry": {
+      "get": {
+        "summary": "Get Telemetry Settings",
+        "operationId": "get_telemetry_settings_api_v1_settings_telemetry_get",
+        "parameters": [
+          {
+            "name": "openlab_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Openlab Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TelemetrySettingsOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "summary": "Save Telemetry Settings",
+        "operationId": "save_telemetry_settings_api_v1_settings_telemetry_put",
+        "parameters": [
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          },
+          {
+            "name": "openlab_csrf",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Openlab Csrf"
+            }
+          },
+          {
+            "name": "openlab_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Openlab Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TelemetrySettingsInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TelemetrySettingsOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/settings/telemetry/history": {
+      "delete": {
+        "summary": "Delete Telemetry History",
+        "operationId": "delete_telemetry_history_api_v1_settings_telemetry_history_delete",
+        "parameters": [
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          },
+          {
+            "name": "openlab_csrf",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Openlab Csrf"
+            }
+          },
+          {
+            "name": "openlab_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Openlab Session"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "title": "Response Delete Telemetry History Api V1 Settings Telemetry History Delete"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/settings/communications": {
+      "put": {
+        "summary": "Save Communications",
+        "operationId": "save_communications_api_v1_settings_communications_put",
+        "parameters": [
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          },
+          {
+            "name": "openlab_csrf",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Openlab Csrf"
+            }
+          },
+          {
+            "name": "openlab_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Openlab Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NewsletterSettingsInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TelemetrySettingsOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/readiness": {
       "get": {
         "summary": "Get Readiness",
@@ -7836,6 +8138,20 @@
         ],
         "title": "NetworkOut"
       },
+      "NewsletterSettingsInput": {
+        "properties": {
+          "newsletter_opt_in": {
+            "type": "boolean",
+            "title": "Newsletter Opt In"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "newsletter_opt_in"
+        ],
+        "title": "NewsletterSettingsInput"
+      },
       "OnboardingOut": {
         "properties": {
           "completed_at": {
@@ -8734,6 +9050,11 @@
             "maxLength": 120,
             "minLength": 1,
             "title": "Display Name"
+          },
+          "newsletter_opt_in": {
+            "type": "boolean",
+            "title": "Newsletter Opt In",
+            "default": false
           }
         },
         "type": "object",
@@ -9023,6 +9344,79 @@
           "quantity"
         ],
         "title": "StockMutation"
+      },
+      "TelemetrySettingsInput": {
+        "properties": {
+          "usage_enabled": {
+            "type": "boolean",
+            "title": "Usage Enabled"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "usage_enabled"
+        ],
+        "title": "TelemetrySettingsInput"
+      },
+      "TelemetrySettingsOut": {
+        "properties": {
+          "usage_enabled": {
+            "type": "boolean",
+            "title": "Usage Enabled"
+          },
+          "installation_id": {
+            "type": "string",
+            "title": "Installation Id"
+          },
+          "disclosure_version": {
+            "type": "string",
+            "title": "Disclosure Version"
+          },
+          "onboarding_seen_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Onboarding Seen At"
+          },
+          "last_reported_day": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Reported Day"
+          },
+          "pending_delivery_count": {
+            "type": "integer",
+            "title": "Pending Delivery Count"
+          },
+          "newsletter_status": {
+            "type": "string",
+            "title": "Newsletter Status"
+          }
+        },
+        "type": "object",
+        "required": [
+          "usage_enabled",
+          "installation_id",
+          "disclosure_version",
+          "onboarding_seen_at",
+          "last_reported_day",
+          "pending_delivery_count",
+          "newsletter_status"
+        ],
+        "title": "TelemetrySettingsOut"
       },
       "ThingCreate": {
         "properties": {
