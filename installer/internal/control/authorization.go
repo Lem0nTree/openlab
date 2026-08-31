@@ -69,11 +69,14 @@ func CallHelper(ctx context.Context, request Request) (any, error) {
 	}
 	command := exec.CommandContext(ctx, "/usr/bin/sudo", "-n", HelperPath)
 	command.Env = []string{"PATH=/usr/bin:/bin", "LANG=C.UTF-8"}
+	if os.Getenv("TERM") == "dumb" {
+		command.Env = append(command.Env, "TERM=dumb")
+	}
 	command.Stdin = bytes.NewReader(request.JSON())
 	output := &cappedBuffer{limit: 128 * 1024}
 	command.Stdout = output
-	// The helper emits only fixed lifecycle progress on stderr. Forward it so a
-	// normal terminal install remains observable while stdout stays strict JSON.
+	// Preserve the actual terminal descriptor so the helper can render progress.
+	// Redirected stderr stays plain; stdout remains the strict JSON protocol.
 	command.Stderr = os.Stderr
 	err := command.Run()
 	var response struct {

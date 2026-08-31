@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"fmt"
 	"io"
 	"os"
 	"os/exec"
@@ -22,13 +21,16 @@ type Runner interface {
 type StreamRunner interface {
 	RunTo(context.Context, time.Duration, io.Writer, string, ...string) error
 }
+
 // ProgressRunner is used only for bounded, non-sensitive lifecycle commands.
-// It streams redacted command lines to the local terminal while retaining a
-// capped result for error handling.
+// It supplies redacted events to the display while retaining a capped result.
 type ProgressRunner interface {
 	RunProgress(context.Context, time.Duration, []byte, string, ...string) ([]byte, error)
 }
-type SystemRunner struct{ Secrets []string }
+type SystemRunner struct {
+	Secrets  []string
+	Progress func(string)
+}
 type cappedBuffer struct {
 	bytes.Buffer
 	limit int
@@ -89,11 +91,12 @@ func (r SystemRunner) Run(ctx context.Context, timeout time.Duration, input []by
 }
 
 type progressWriter struct {
-	mu      sync.Mutex
-	capture cappedBuffer
-	line    bytes.Buffer
-	stderr  io.Writer
-	secrets []string
+	mu        sync.Mutex
+	capture   cappedBuffer
+	line      bytes.Buffer
+	notify    func(string)
+	secrets   []string
+	oversized bool
 }
 
 func (w *progressWriter) Write(p []byte) (int, error) {
@@ -104,23 +107,39 @@ func (w *progressWriter) Write(p []byte) (int, error) {
 	for len(p) > 0 {
 		index := bytes.IndexByte(p, '\n')
 		if index < 0 {
-			_, _ = w.line.Write(p)
+			w.appendLine(p)
 			break
 		}
-		_, _ = w.line.Write(p[:index])
+		w.appendLine(p[:index])
 		w.emit()
 		p = p[index+1:]
 	}
 	return n, nil
 }
 
+func (w *progressWriter) appendLine(p []byte) {
+	if w.line.Len()+len(p) > 16384 {
+		w.oversized = true
+		w.line.Reset()
+	}
+	if !w.oversized {
+		_, _ = w.line.Write(p)
+	}
+}
+
 func (w *progressWriter) emit() {
 	line := strings.TrimSpace(Redact(w.line.String(), w.secrets))
 	w.line.Reset()
+	if w.oversized {
+		w.oversized = false
+		return
+	}
 	if line == "" {
 		return
 	}
-	_, _ = fmt.Fprintf(w.stderr, "OpenLab:   %s\n", line)
+	if w.notify != nil {
+		w.notify(line)
+	}
 }
 
 func (w *progressWriter) flush() {
@@ -143,7 +162,7 @@ func (r SystemRunner) RunProgress(ctx context.Context, timeout time.Duration, in
 	command := exec.CommandContext(ctx, executable, args...)
 	command.Env = []string{"PATH=/usr/sbin:/usr/bin:/sbin:/bin:/usr/local/bin", "HOME=/root", "LANG=C.UTF-8", "DEBIAN_FRONTEND=noninteractive"}
 	command.Stdin = bytes.NewReader(input)
-	stream := &progressWriter{capture: cappedBuffer{limit: 65536}, stderr: os.Stderr, secrets: r.Secrets}
+	stream := &progressWriter{capture: cappedBuffer{limit: 65536}, notify: r.Progress, secrets: r.Secrets}
 	command.Stdout = stream
 	command.Stderr = stream
 	err = command.Run()

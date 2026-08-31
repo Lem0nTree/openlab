@@ -57,6 +57,7 @@ jobs:
       packages: write
     outputs:
       server: ${{ steps.server.outputs.digest }}
+      kicad: ${{ steps.kicad.outputs.digest }}
       web: ${{ steps.web.outputs.digest }}
       postgres: ${{ steps.postgres.outputs.image }}
     steps:
@@ -78,6 +79,15 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: true
           tags: ghcr.io/lem0ntree/openlab-server:${{ needs.validate.outputs.version }}
+      - uses: docker/build-push-action@v6
+        id: kicad
+        with:
+          context: .
+          file: deploy/Dockerfile.backend
+          platforms: linux/amd64,linux/arm64
+          build-args: OPENLAB_INSTALL_KICAD=1
+          push: true
+          tags: ghcr.io/lem0ntree/openlab-worker-kicad:${{ needs.validate.outputs.version }}
       - uses: docker/build-push-action@v6
         id: web
         with:
@@ -117,6 +127,14 @@ jobs:
           WEB_DIGEST: ${{ needs.images.outputs.web }}
           POSTGRES_IMAGE: ${{ needs.images.outputs.postgres }}
         run: python3 installer/tests/compose-smoke.py --server "ghcr.io/lem0ntree/openlab-server@$SERVER_DIGEST" --web "ghcr.io/lem0ntree/openlab-web@$WEB_DIGEST" --postgres "$POSTGRES_IMAGE"
+      - uses: docker/setup-qemu-action@v3
+      - name: Verify optional KiCad worker CLI on both architectures before signing
+        env:
+          KICAD_DIGEST: ${{ needs.images.outputs.kicad }}
+        run: |
+          for arch in amd64 arm64; do
+            docker run --rm --platform "linux/$arch" --network none "ghcr.io/lem0ntree/openlab-worker-kicad@$KICAD_DIGEST" kicad-cli --version
+          done
 
   package:
     needs: [validate, images, smoke]
@@ -150,9 +168,10 @@ jobs:
           OPENLAB_RELEASE_PUBLIC_KEY: ${{ vars.OPENLAB_RELEASE_PUBLIC_KEY }}
           OPENLAB_RELEASE_SIGNING_SEED: ${{ secrets.OPENLAB_RELEASE_SIGNING_SEED }}
           SERVER_DIGEST: ${{ needs.images.outputs.server }}
+          KICAD_DIGEST: ${{ needs.images.outputs.kicad }}
           WEB_DIGEST: ${{ needs.images.outputs.web }}
           POSTGRES_IMAGE: ${{ needs.images.outputs.postgres }}
-        run: go run ./cmd/releasepack --version "$VERSION" --server "ghcr.io/lem0ntree/openlab-server@$SERVER_DIGEST" --web "ghcr.io/lem0ntree/openlab-web@$WEB_DIGEST" --postgres "$POSTGRES_IMAGE"
+        run: go run ./cmd/releasepack --version "$VERSION" --server "ghcr.io/lem0ntree/openlab-server@$SERVER_DIGEST" --kicad-worker "ghcr.io/lem0ntree/openlab-worker-kicad@$KICAD_DIGEST" --web "ghcr.io/lem0ntree/openlab-web@$WEB_DIGEST" --postgres "$POSTGRES_IMAGE"
       - name: Publish immutable versioned assets (never overwrite an existing release)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

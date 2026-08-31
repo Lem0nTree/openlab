@@ -36,16 +36,23 @@ binary checksum, then installs the static CLI. The inspected bootstrap script
 and its embedded public key are the initial trust decision. Later downloads are
 verified by that key; unsigned or altered releases fail closed.
 
-During installation, the terminal reports fixed phases for release validation,
-local secret preparation, image pulling, service startup, and readiness. Image
-pulls can take several minutes on a Raspberry Pi. The readiness meter checks
-only the host services; it never waits for you to fill in the browser wizard.
+During installation, an interactive terminal shows a single refreshing status
+line with a spinner, an activity bar, the current phase, and elapsed seconds.
+Docker events update that line instead of printing every container transition.
+The animation continues even when Docker or a diagnostic call is quiet. Image
+pulls can take several minutes on a Raspberry Pi. The activity bar is not a
+completion percentage. Readiness shows `DB`, `API`, `Web`, and `Worker` as `wait`
+or `ok`, based on service/image checks, HTTP routes, and the worker heartbeat.
+It never waits for you to fill in the browser wizard.
 If it reports a timeout, run `openlabctl doctor` for the named check rather
 than assuming that entering owner details will unblock it.
 
-While images are pulled or services start, sanitized Docker progress events are
-printed live to the terminal on stderr. The final installation result remains
-JSON on stdout so scripts and the scoped helper can parse it reliably.
+Progress stays on stderr. Redirected logs (including MCP captures) and `TERM=dumb` terminals receive
+plain phase messages and a heartbeat every 30 seconds, without ANSI animation
+or a line for every Docker event. The scoped helper always returns JSON on
+stdout. Interactive `install` and `update` commands finish with a short summary;
+use `--json` for the full result. Redirecting stdout also preserves the JSON
+result automatically. Errors keep their diagnostic code and remediation.
 
 Open the URL printed by `setup-link` in a browser on the same trusted network.
 Its fragment contains the one-time owner setup token: treat the whole link as a
@@ -156,7 +163,8 @@ openlabctl network bind --bind 192.168.1.40 --port 3000
 openlabctl network tailscale --install-deps
 ```
 
-Lifecycle commands return bounded JSON. `doctor` exits nonzero when required host
+Lifecycle commands return bounded JSON when redirected or requested with `--json`.
+Interactive installation/update summaries stay short. `doctor` exits nonzero when required host
 checks fail. `repair secrets` validates/preserves existing encryption and session
 keys; it never replaces keys needed to decrypt existing data. The migration repair
 temporarily stops application services and runs the release's Alembic migrations.

@@ -18,9 +18,10 @@ import (
 const ReleaseBase = "https://github.com/Lem0nTree/openlab/releases"
 
 type Images struct {
-	Server   string `json:"server"`
-	Web      string `json:"web"`
-	Postgres string `json:"postgres"`
+	Server      string `json:"server"`
+	Web         string `json:"web"`
+	Postgres    string `json:"postgres"`
+	KicadWorker string `json:"kicad_worker,omitempty"`
 }
 
 type Manifest struct {
@@ -81,6 +82,12 @@ func (m Manifest) Validate() error {
 		}
 		if !strings.HasPrefix(image, prefix) || !digestPattern.MatchString(strings.TrimPrefix(image, prefix)) {
 			return errors.New("images must use approved repositories and immutable digests")
+		}
+	}
+	if m.Images.KicadWorker != "" {
+		prefix := "ghcr.io/lem0ntree/openlab-worker-kicad@sha256:"
+		if !strings.HasPrefix(m.Images.KicadWorker, prefix) || !digestPattern.MatchString(strings.TrimPrefix(m.Images.KicadWorker, prefix)) {
+			return errors.New("KiCad worker must use the approved repository and an immutable digest")
 		}
 	}
 	return nil

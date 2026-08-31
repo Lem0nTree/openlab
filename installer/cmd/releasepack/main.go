@@ -36,6 +36,7 @@ func run() error {
 	out := flag.String("out", "dist", "Directory containing compiled release binaries")
 	version := flag.String("version", "", "Release tag")
 	server := flag.String("server", "", "Immutable multiarch server image")
+	kicad := flag.String("kicad-worker", "", "Optional immutable multiarch KiCad worker image")
 	web := flag.String("web", "", "Immutable multiarch web image")
 	postgres := flag.String("postgres", "", "Immutable multiarch pgvector image")
 	metadata := flag.String("metadata", "release-policy.json", "Reviewed compatibility policy")
@@ -96,6 +97,7 @@ func run() error {
 		}
 		manifest.Binaries[name] = digest(content)
 	}
+	manifest.Images.KicadWorker = *kicad
 	if err = manifest.Validate(); err != nil {
 		return err
 	}

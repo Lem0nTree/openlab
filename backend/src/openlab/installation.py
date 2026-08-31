@@ -57,7 +57,7 @@ class InstallerStatus(BaseModel):
     version: str = Field(max_length=100)
     checks: list[ReadinessCheck] = Field(max_length=30)
     tailscale: Literal["not_installed", "needs_authorization", "connected", "unavailable"] = (
-        "not_installed"
+        "unavailable"
     )
     update_status: Literal[
         "idle",
@@ -345,7 +345,8 @@ def application_readiness(db: Session, lab: Lab, settings: Settings) -> Readines
         "Open the chosen URL, then save it under Network.",
     )
     mcp_url = (lab.public_url or settings.public_url or "").rstrip("/")
-    mcp_direct_ready = bool(lab.mcp_enabled and mcp_url.startswith("https://"))
+    mcp_direct_ready = bool(lab.mcp_enabled and mcp_url.startswith("https://")
+                            and (lab.public_url_verified_at if lab.public_url else settings.public_url))
     checks.append(
         ReadinessCheck(
             id="mcp",
@@ -357,7 +358,7 @@ def application_readiness(db: Session, lab: Lab, settings: Settings) -> Readines
             if mcp_direct_ready
             else "Product MCP is disabled by the lab owner."
             if not lab.mcp_enabled
-            else "Use SSH stdio on this HTTP installation or configure a verified HTTPS origin.",
+            else "Configure private HTTPS with Tailscale or verify your own HTTPS origin, then authorize an MCP client.",
             remediation="Enable MCP in Settings and configure HTTPS for direct network clients."
             if not mcp_direct_ready
             else None,

@@ -15,7 +15,7 @@ import (
 )
 
 func (e *Engine) Install(ctx context.Context, request Request) (any, error) {
-	e.progress("Validating the signed release and host prerequisites.")
+	e.progress("Verifying release")
 	plan, manifest, err := e.Plan(ctx, request)
 	if err != nil {
 		return nil, err
@@ -51,7 +51,7 @@ func (e *Engine) Install(ctx context.Context, request Request) (any, error) {
 		}
 		config = Config{SchemaVersion: 1, Version: manifest.Version, Project: "openlab", BindAddress: plan.Host.BindAddress, Port: plan.Port, Images: manifest.Images, SchemaRevision: manifest.SchemaRevision}
 	}
-	e.progress("Preparing protected OpenLab configuration and local secrets.")
+	e.progress("Preparing installation")
 	bundleURL, _ := releaseURL(manifest.Version, "openlab-bundle.tar.gz")
 	bundle, err := e.download(ctx, bundleURL, 1024*1024)
 	if err != nil {
@@ -94,15 +94,14 @@ func (e *Engine) Install(ctx context.Context, request Request) (any, error) {
 	if err = saveConfig(config); err != nil {
 		return nil, err
 	}
-	e.progress("Pulling verified container images. This can take several minutes on a Raspberry Pi.")
+	e.progress("Pulling images")
 	if _, err = e.composeProgress(ctx, 10*time.Minute, config, "pull"); err != nil {
 		return nil, err
 	}
-	e.progress("Starting OpenLab services and applying the release database schema.")
+	e.progress("Starting services")
 	if _, err = e.composeProgress(ctx, 5*time.Minute, config, "up", "-d", "--no-build"); err != nil {
 		return nil, err
 	}
-	e.progress("Waiting for the server, web app, database, and worker to become ready.")
 	report, err := e.waitReady(ctx)
 	if err != nil {
 		return report, err
@@ -117,7 +116,7 @@ func (e *Engine) Install(ctx context.Context, request Request) (any, error) {
 
 func configureRelease(values map[string]string, config Config) {
 	values["OPENLAB_SERVER_IMAGE"] = config.Images.Server
-	values["OPENLAB_WORKER_IMAGE"] = config.Images.Server
+	values["OPENLAB_WORKER_IMAGE"] = config.WorkerImage()
 	values["OPENLAB_WEB_IMAGE"] = config.Images.Web
 	values["OPENLAB_POSTGRES_IMAGE"] = config.Images.Postgres
 	values["OPENLAB_VERSION"] = config.Version
@@ -357,6 +356,7 @@ func (e *Engine) Update(ctx context.Context, manualFeature bool) (any, error) {
 	return e.updateVersion(ctx, manualFeature, "latest")
 }
 func (e *Engine) updateVersion(ctx context.Context, manualFeature bool, version string) (any, error) {
+	e.progress("Verifying update")
 	config, err := loadConfig()
 	if err != nil {
 		return nil, err
@@ -366,6 +366,7 @@ func (e *Engine) updateVersion(ctx context.Context, manualFeature bool, version 
 		return nil, err
 	}
 	if !Newer(manifest.Version, config.Version) {
+		e.progress("Already up to date")
 		return map[string]string{"status": "current", "version": config.Version}, nil
 	}
 	if config.SourceMode || (!manualFeature && (manifest.Classification != "security" || !manifest.UnattendedSafe)) || !compatibleSchema(manifest, config.SchemaRevision) || Newer(manifest.MinimumInstaller, e.Version) {
@@ -388,6 +389,7 @@ func (e *Engine) updateVersion(ctx context.Context, manualFeature bool, version 
 		}
 		previous[path] = data
 	}
+	e.progress("Backing up data")
 	backup, err := e.Backup(ctx)
 	if err != nil {
 		return nil, err
@@ -396,6 +398,9 @@ func (e *Engine) updateVersion(ctx context.Context, manualFeature bool, version 
 	next.Version = manifest.Version
 	next.Images = manifest.Images
 	next.SchemaRevision = manifest.SchemaRevision
+	if err = next.Validate(); err != nil {
+		return nil, err
+	}
 	values, err := readEnvironment()
 	if err != nil {
 		return nil, err
@@ -417,11 +422,11 @@ func (e *Engine) updateVersion(ctx context.Context, manualFeature bool, version 
 		if err := saveConfig(next); err != nil {
 			return err
 		}
-		e.progress("Pulling the verified update images. Docker progress will appear below.")
+		e.progress("Pulling update images")
 		if _, err := e.composeProgress(ctx, 10*time.Minute, next, "pull"); err != nil {
 			return err
 		}
-		e.progress("Starting updated OpenLab services and applying the release database schema.")
+		e.progress("Starting services")
 		if _, err := e.composeProgress(ctx, 5*time.Minute, next, "up", "-d", "--no-build", "--force-recreate"); err != nil {
 			return err
 		}
@@ -432,6 +437,7 @@ func (e *Engine) updateVersion(ctx context.Context, manualFeature bool, version 
 		return e.publishStatus(report, "", "updated")
 	}
 	if err = apply(); err != nil {
+		e.progress("Restoring previous release")
 		rollbackCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 8*time.Minute)
 		defer cancel()
 		for path, data := range previous {
@@ -449,19 +455,26 @@ func (e *Engine) updateVersion(ctx context.Context, manualFeature bool, version 
 		}
 		return report, Fail("UPDATE_ROLLED_BACK", "Update failed readiness; the previous images and configuration were restored. Database migrations were not reversed.", "Inspect the release and diagnostic report before retrying.")
 	}
+	if _, systemdErr := os.Stat("/run/systemd/system"); systemdErr == nil {
+		if err = e.installTimers(ctx); err != nil {
+			return nil, err
+		}
+	}
 	return map[string]any{"status": "updated", "version": manifest.Version, "backup": backup}, nil
 }
 
 func (e *Engine) Tailscale(ctx context.Context, installDeps bool) (any, error) {
+	e.progress("Checking Tailscale")
 	config, err := loadConfig()
 	if err != nil {
 		return nil, err
 	}
 	raw, statusErr := e.runner().Run(ctx, 10*time.Second, nil, "tailscale", "status", "--json")
-	if statusErr != nil && len(raw) == 0 {
+	if SafeError(statusErr).Code == "DEPENDENCY_MISSING" {
 		if !installDeps {
 			return nil, Fail("TAILSCALE_NOT_INSTALLED", "Tailscale is unavailable and installation was not authorized.", "Run openlabctl network tailscale --install-deps.")
 		}
+		e.progress("Installing Tailscale")
 		host, _ := Inspect(ctx, e.runner())
 		distro, err := distroName(host)
 		if err != nil {
@@ -487,6 +500,10 @@ func (e *Engine) Tailscale(ctx context.Context, installDeps bool) (any, error) {
 		if _, err = e.runner().Run(ctx, time.Minute, nil, "systemctl", "enable", "--now", "tailscaled"); err != nil {
 			return nil, err
 		}
+		raw, statusErr = e.runner().Run(ctx, 10*time.Second, nil, "tailscale", "status", "--json")
+	}
+	if statusErr != nil && len(raw) == 0 {
+		return nil, Fail("TAILSCALE_UNAVAILABLE", "Tailscale is installed but its daemon is unavailable. Check tailscaled on the host; it was not reinstalled.", "")
 	}
 	var status struct {
 		BackendState string `json:"BackendState"`
@@ -498,6 +515,7 @@ func (e *Engine) Tailscale(ctx context.Context, installDeps bool) (any, error) {
 	}
 	_ = json.Unmarshal(raw, &status)
 	if status.BackendState != "Running" {
+		e.progress("Waiting for Tailscale authorization")
 		_, _ = e.runner().Run(ctx, 20*time.Second, nil, "tailscale", "up", "--timeout=10s")
 		raw, _ = e.runner().Run(ctx, 10*time.Second, nil, "tailscale", "status", "--json")
 		_ = json.Unmarshal(raw, &status)
@@ -515,6 +533,7 @@ func (e *Engine) Tailscale(ctx context.Context, installDeps bool) (any, error) {
 		return nil, errors.New("Tailscale has no address")
 	}
 	config.TailscaleIP = status.Self.TailscaleIPs[0]
+	e.progress("Connecting OpenLab to Tailscale")
 	if err = config.Validate(); err != nil {
 		return nil, err
 	}
@@ -527,12 +546,18 @@ func (e *Engine) Tailscale(ctx context.Context, installDeps bool) (any, error) {
 	if _, err = e.compose(ctx, 2*time.Minute, config, "up", "-d", "--no-build", "openlab-web"); err != nil {
 		return nil, err
 	}
+	report, err = e.waitReady(ctx)
+	if err != nil {
+		return report, err
+	}
 	_ = e.publishStatus(report, "connected", "")
 	return map[string]string{"status": "connected", "url": fmt.Sprintf("http://%s:%d", strings.TrimSuffix(status.Self.DNSName, "."), config.Port)}, nil
 }
 
 func (e *Engine) installTimers(ctx context.Context) error {
 	units := map[string]string{
+		"openlab-setup.service":           "[Unit]\nDescription=Process owner-approved OpenLab setup actions\nAfter=docker.service network-online.target\n[Service]\nType=oneshot\nExecStart=" + BinaryPath + " internal setup\nTimeoutStartSec=25min\nUMask=0077\n",
+		"openlab-setup.timer":             "[Unit]\nDescription=Refresh setup status and process requests\n[Timer]\nOnBootSec=20s\nOnUnitActiveSec=10s\nAccuracySec=1s\n[Install]\nWantedBy=timers.target\n",
 		"openlab-status.service":          "[Unit]\nDescription=Refresh redacted OpenLab diagnostics\nAfter=docker.service\n[Service]\nType=oneshot\nExecStart=" + BinaryPath + " internal status\n",
 		"openlab-status.timer":            "[Unit]\nDescription=Refresh OpenLab diagnostics every five minutes\n[Timer]\nOnBootSec=1min\nOnUnitActiveSec=5min\n[Install]\nWantedBy=timers.target\n",
 		"openlab-security-update.service": "[Unit]\nDescription=Apply eligible OpenLab security updates during the chosen window\nAfter=docker.service network-online.target\n[Service]\nType=oneshot\nExecStart=" + BinaryPath + " internal scheduled-update\nTimeoutStartSec=30min\n",
@@ -546,6 +571,6 @@ func (e *Engine) installTimers(ctx context.Context) error {
 	if _, err := e.runner().Run(ctx, 30*time.Second, nil, "systemctl", "daemon-reload"); err != nil {
 		return err
 	}
-	_, err := e.runner().Run(ctx, 30*time.Second, nil, "systemctl", "enable", "--now", "openlab-status.timer", "openlab-security-update.timer")
+	_, err := e.runner().Run(ctx, 30*time.Second, nil, "systemctl", "enable", "--now", "openlab-status.timer", "openlab-security-update.timer", "openlab-setup.timer")
 	return err
 }
