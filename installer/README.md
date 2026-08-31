@@ -16,9 +16,9 @@ to download/apply signed releases fail closed until built with the official key.
 
 ## Maintainer release setup
 
-The manual **Signed installer release** workflow is separate from the existing
-CI-gated Pi deployment. It does not SSH to the Pi or reuse its build runner.
-Do not dispatch it merely to test a branch: it publishes GHCR images and GitHub
+The manual **Signed installer release** workflow publishes the package used for
+Pi installations. It does not SSH to a Pi or reuse a remote build runner. Do
+not dispatch it merely to test a branch: it publishes GHCR images and GitHub
 release assets. Configure a protected `release` environment with required human
 reviewers and restricted release branches/tags, plus:
 
