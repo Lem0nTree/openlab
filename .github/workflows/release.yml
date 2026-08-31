@@ -132,8 +132,12 @@ jobs:
         env:
           KICAD_DIGEST: ${{ needs.images.outputs.kicad }}
         run: |
+          image=ghcr.io/lem0ntree/openlab-worker-kicad
+          docker buildx imagetools inspect --raw "$image@$KICAD_DIGEST" > kicad-index.json
           for arch in amd64 arm64; do
-            docker run --rm --platform "linux/$arch" --network none "ghcr.io/lem0ntree/openlab-worker-kicad@$KICAD_DIGEST" kicad-cli --version
+            digest=$(jq -er --arg arch "$arch" '[.manifests[] | select(.platform.os == "linux" and .platform.architecture == $arch) | .digest] | if length == 1 then .[0] else error("expected one architecture manifest") end' kicad-index.json)
+            [[ "$digest" =~ ^sha256:[a-f0-9]{64}$ ]]
+            docker run --rm --platform "linux/$arch" --network none "$image@$digest" kicad-cli --version
           done
 
   package:
