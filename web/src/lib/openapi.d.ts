@@ -127,6 +127,58 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/settings/telemetry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Telemetry Settings */
+        get: operations["get_telemetry_settings_api_v1_settings_telemetry_get"];
+        /** Save Telemetry Settings */
+        put: operations["save_telemetry_settings_api_v1_settings_telemetry_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/settings/telemetry/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Telemetry History */
+        delete: operations["delete_telemetry_history_api_v1_settings_telemetry_history_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/settings/communications": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Save Communications */
+        put: operations["save_communications_api_v1_settings_communications_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/readiness": {
         parameters: {
             query?: never;
@@ -1707,6 +1759,11 @@ export interface components {
             /** Verified */
             verified: boolean;
         };
+        /** NewsletterSettingsInput */
+        NewsletterSettingsInput: {
+            /** Newsletter Opt In */
+            newsletter_opt_in: boolean;
+        };
         /** OnboardingOut */
         OnboardingOut: {
             /** Completed At */
@@ -2013,6 +2070,11 @@ export interface components {
             password: string;
             /** Display Name */
             display_name: string;
+            /**
+             * Newsletter Opt In
+             * @default false
+             */
+            newsletter_opt_in: boolean;
         };
         /** StockAdjustment */
         StockAdjustment: {
@@ -2089,6 +2151,28 @@ export interface components {
             from_location_id?: string | null;
             /** Note */
             note?: string | null;
+        };
+        /** TelemetrySettingsInput */
+        TelemetrySettingsInput: {
+            /** Usage Enabled */
+            usage_enabled: boolean;
+        };
+        /** TelemetrySettingsOut */
+        TelemetrySettingsOut: {
+            /** Usage Enabled */
+            usage_enabled: boolean;
+            /** Installation Id */
+            installation_id: string;
+            /** Disclosure Version */
+            disclosure_version: string;
+            /** Onboarding Seen At */
+            onboarding_seen_at: string | null;
+            /** Last Reported Day */
+            last_reported_day: string | null;
+            /** Pending Delivery Count */
+            pending_delivery_count: number;
+            /** Newsletter Status */
+            newsletter_status: string;
         };
         /** ThingCreate */
         ThingCreate: {
@@ -2531,6 +2615,149 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SettingsOverviewOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_telemetry_settings_api_v1_settings_telemetry_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                openlab_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TelemetrySettingsOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    save_telemetry_settings_api_v1_settings_telemetry_put: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                openlab_csrf?: string | null;
+                openlab_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TelemetrySettingsInput"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TelemetrySettingsOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_telemetry_history_api_v1_settings_telemetry_history_delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                openlab_csrf?: string | null;
+                openlab_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: string;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    save_communications_api_v1_settings_communications_put: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                openlab_csrf?: string | null;
+                openlab_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NewsletterSettingsInput"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TelemetrySettingsOut"];
                 };
             };
             /** @description Validation Error */

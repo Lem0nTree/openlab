@@ -29,6 +29,7 @@ services:
       OPENLAB_PUBLIC_URL: ${OPENLAB_PUBLIC_URL:-}
       OPENLAB_KICAD_CLI: ${OPENLAB_KICAD_CLI:-}
       OPENLAB_VERSION: ${OPENLAB_VERSION:-development}
+      OPENLAB_TELEMETRY_ENDPOINT: ${OPENLAB_TELEMETRY_ENDPOINT:-https://telemetry.openlab.tools/v1}
       OPENLAB_INSTALLER_CONTROL_DIR: ${OPENLAB_INSTALLER_CONTROL_DIR:-}
     extra_hosts:
       - "host.docker.internal:host-gateway"
@@ -59,6 +60,7 @@ services:
       OPENLAB_ENCRYPTION_KEY: ${OPENLAB_ENCRYPTION_KEY:-}
       OPENLAB_KICAD_CLI: ${OPENLAB_KICAD_CLI:-}
       OPENLAB_VERSION: ${OPENLAB_VERSION:-development}
+      OPENLAB_TELEMETRY_ENDPOINT: ${OPENLAB_TELEMETRY_ENDPOINT:-https://telemetry.openlab.tools/v1}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:

@@ -22,6 +22,7 @@ export type LabSettings = { id: string; name: string; units: "metric" | "imperia
 export type KicadSettings = { cli_path: string | null; effective_cli: string | null; source: "settings" | "environment" | "unset"; check_status: "unknown" | "queued" | "running" | "available" | "unavailable"; version: string | null; error: string | null };
 export type EnvironmentVariable = { name: string; category: "application" | "security" | "infrastructure"; status: "configured" | "not_configured" | "deployment_managed"; value: string | null; secret: boolean; editable: boolean; restart_required: boolean; description: string };
 export type SettingsOverview = { lab: LabSettings; kicad: KicadSettings; environment: EnvironmentVariable[] };
+export type TelemetrySettings = { usage_enabled: boolean; installation_id: string; disclosure_version: string; onboarding_seen_at: string | null; last_reported_day: string | null; pending_delivery_count: number; newsletter_status: string };
 export type McpGrant = { id: string; client_name: string; scopes: string[]; last_used_at: string | null; expires_at: string | null };
 export type McpIntegration = import("./openapi").components["schemas"]["McpIntegrationOut"];
 export type Project = { id: string; name: string; description: string | null; status: string; revision: number; created_at: string; updated_at: string };

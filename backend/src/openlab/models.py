@@ -455,3 +455,49 @@ class AuditEvent(Base):
     entity_id: Mapped[str] = mapped_column(String(36), nullable=False)
     details: Mapped[dict[str, object]] = mapped_column(JSONB, default=dict, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class TelemetryState(Base):
+    """One privacy-preserving reporting identity per persistent installation."""
+
+    __tablename__ = "telemetry_state"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default="installation")
+    installation_id: Mapped[str] = mapped_column(String(36), unique=True, nullable=False, default=new_id)
+    credential_ciphertext: Mapped[str] = mapped_column(Text, nullable=False)
+    usage_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    disclosure_version: Mapped[str] = mapped_column(String(40), default="2026-08-31", nullable=False)
+    onboarding_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_reported_day: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_queued_day: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    registered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+class CommunicationConsent(Base):
+    __tablename__ = "communication_consents"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), unique=True, nullable=False, index=True)
+    newsletter_opt_in: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    notice_version: Mapped[str] = mapped_column(String(40), nullable=False)
+    consented_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    subscription_token_ciphertext: Mapped[str | None] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(String(30), default="not_subscribed", nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+class TelemetryOutbox(Base):
+    __tablename__ = "telemetry_outbox"
+    __table_args__ = (UniqueConstraint("idempotency_key", name="uq_telemetry_outbox_idempotency"),)
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    kind: Mapped[str] = mapped_column(String(40), nullable=False, index=True)
+    idempotency_key: Mapped[str] = mapped_column(String(160), nullable=False)
+    activity_day: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
+    consent_id: Mapped[str | None] = mapped_column(ForeignKey("communication_consents.id"), index=True)
+    status: Mapped[str] = mapped_column(String(30), default="queued", nullable=False, index=True)
+    attempts: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    next_attempt_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    last_error: Mapped[str | None] = mapped_column(Text)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

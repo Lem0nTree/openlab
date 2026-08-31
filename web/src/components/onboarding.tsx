@@ -2,18 +2,19 @@
 
 import Link from "next/link";
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
-import { api, type Job, type LabSettings, type McpIntegration, type ProviderConfig, type SettingsOverview } from "@/lib/api";
+import { api, type Job, type LabSettings, type McpIntegration, type ProviderConfig, type SettingsOverview, type TelemetrySettings } from "@/lib/api";
 import { connectOnboardingProvider, initialSetupStep, openRouterEndpoint, openRouterFreeModel, readinessLabel, readinessStep, setupSteps, type InstallationOverview, type InstallationPolicy, type NetworkSettings, type OnboardingState } from "@/lib/onboarding";
 import styles from "./onboarding.module.css";
 import { OnboardingHostSetup } from "./onboarding-host-setup";
 
 async function loadSetup() {
-  const [next, settings, install, integration] = await Promise.all([
+  const [next, settings, install, integration, telemetry] = await Promise.all([
     api<OnboardingState>("/onboarding"), api<SettingsOverview>("/settings"),
     api<InstallationOverview>("/settings/installation"),
     api<McpIntegration>("/integrations/mcp"),
+    api<TelemetrySettings>("/settings/telemetry"),
   ]);
-  return { next, settings, install, integration };
+  return { next, settings, install, integration, telemetry };
 }
 
 export function Onboarding() {
@@ -21,6 +22,7 @@ export function Onboarding() {
   const [overview, setOverview] = useState<SettingsOverview | null>(null);
   const [installation, setInstallation] = useState<InstallationOverview | null>(null);
   const [mcp, setMcp] = useState<McpIntegration | null>(null);
+  const [telemetry, setTelemetry] = useState<TelemetrySettings | null>(null);
   const [policy, setPolicy] = useState<InstallationPolicy>({ security_updates: true, weekday: 0, hour: 3, minute: 0 });
   const [step, setStep] = useState(0);
   const [busy, setBusy] = useState(false);
@@ -41,23 +43,24 @@ export function Onboarding() {
   const aiKeyStored = provider?.has_api_key && provider.base_url === endpoint;
 
   const refresh = useCallback(async () => {
-    const { next, settings, install, integration } = await loadSetup();
+    const { next, settings, install, integration, telemetry: telemetrySettings } = await loadSetup();
     setState(next); setOverview(settings); setInstallation(install);
     setMcp(integration);
+    setTelemetry(telemetrySettings);
     return { next, settings, install };
   }, []);
 
   useEffect(() => {
     let cancelled = false;
     Promise.all([loadSetup(), api<ProviderConfig | null>("/ai/provider")])
-      .then(([{ next, settings, install, integration }, ai]) => {
+      .then(([{ next, settings, install, integration, telemetry: telemetrySettings }, ai]) => {
         if (cancelled) return;
         setState(next); setOverview(settings); setInstallation(install);
         setStep(initialSetupStep(next)); setName(settings.lab.name); setUnits(settings.lab.units);
         setUrl(next.network.public_url ?? window.location.origin); setPolicy(install.policy);
         setSecureBrowser(window.location.protocol === "https:");
         setKicad(settings.kicad.cli_path ?? ""); setProvider(ai);
-        setEndpoint(ai?.base_url ?? ""); setModel(ai?.model ?? ""); setMcp(integration);
+        setEndpoint(ai?.base_url ?? ""); setModel(ai?.model ?? ""); setMcp(integration); setTelemetry(telemetrySettings);
       }).catch((failure: Error) => { if (!cancelled) setError(failure.message); });
     return () => { cancelled = true; };
   }, [refresh]);
@@ -225,6 +228,7 @@ export function Onboarding() {
       </>}
       {step === readinessStep && <><p className="eyebrow">07 · READINESS</p><h2>{readinessLabel(state.readiness)}</h2><p>Release: {state.readiness.version}. Last checked: {new Date(state.readiness.checked_at).toLocaleTimeString()}. Checks refresh every 10 seconds.</p>
         <ul className={styles.checks}>{state.readiness.checks.map((check) => <li key={check.id} data-status={check.status}><span className={styles.badge}>{check.status === "pass" ? "✓" : check.status === "pending" ? "…" : "!"}</span><div><h3>{check.label} <small>{check.required ? "Required" : "Optional"}</small></h3><p>{check.summary}</p>{check.remediation && <p className={styles.fix}>{check.remediation}</p>}{check.code !== "OK" && <small>{check.code}</small>}</div></li>)}</ul>
+        {telemetry && <aside className={styles.guide}><p className="eyebrow">USAGE TELEMETRY</p><h3>Help improve OpenLab</h3><label className={styles.telemetryToggle}><input type="checkbox" checked={telemetry.usage_enabled} disabled={busy} onChange={(event) => void run(async () => { const saved = await api<TelemetrySettings>("/settings/telemetry", { method: "PUT", body: JSON.stringify({ usage_enabled: event.target.checked }) }); setTelemetry(saved); })} /><span>Share privacy-preserving daily usage data</span></label><p>Active by default. OpenLab sends a stable pseudonymous installation ID, version, platform, and daily aggregate counts (including zero-activity days) to telemetry.openlab.tools. It never sends inventory, captures, lab names, email addresses, or provider settings. Per-installation reports are retained for up to 24 months, then only non-linkable aggregates remain. You can turn this off or request deletion later in Settings.</p><p className={styles.note}>Read the <a href="https://openlab.tools/privacy" target="_blank" rel="noreferrer">privacy policy</a>. Your installation ID: <code>{telemetry.installation_id}</code></p></aside>}
         <div className={styles.actions}><button type="button" disabled={busy || state.readiness.overall === "blocked"} onClick={() => void run(async () => { await api("/onboarding/complete", { method: "POST" }); window.location.replace("/"); })}>Finish and open my lab</button><button type="button" className="secondary-button" disabled={busy} onClick={() => void run(async () => { await refresh(); })}>Check again</button></div>
         <p className={styles.note}>Optional warnings do not block your lab. You can revisit this guide from Settings at any time.</p>
       </>}

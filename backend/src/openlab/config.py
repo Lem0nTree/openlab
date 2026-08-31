@@ -41,6 +41,10 @@ class Settings(BaseSettings):
     installer_control_dir: Path | None = Field(
         default=None, validation_alias="OPENLAB_INSTALLER_CONTROL_DIR"
     )
+    telemetry_endpoint: str = Field(
+        default="https://telemetry.openlab.tools/v1",
+        validation_alias="OPENLAB_TELEMETRY_ENDPOINT",
+    )
 
     @field_validator("installer_control_dir", mode="before")
     @classmethod
