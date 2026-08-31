@@ -20,10 +20,18 @@ Point a Streamable HTTP-capable harness at `https://LAB.example/mcp`. Register
 the harness as a public client with its exact redirect URI, then authorize it
 in the browser. Never put an access token in a harness configuration file.
 
-For current HTTP-only LAN deployments, keep MCP transport off the network and
-use an SSH tunnel/bridge to the lab host. Direct plain-HTTP product MCP is
-intentionally refused; install a verified HTTPS public URL before using direct
-network transport.
+Skipping MCP during onboarding does not prevent later setup. Open **Settings →
+MCP integrations** to enable private HTTPS with Tailscale, open the secure setup
+link, sign in, and choose **Use this HTTPS address**. The same section displays
+the verified MCP endpoint, a copy button, and expandable instructions to send
+to an AI harness. **Check client connection** refreshes grants and usage; it
+does not initiate a client connection. Permissions can still be revoked there.
+
+Direct plain-HTTP product MCP is intentionally refused. Product MCP does not
+currently supply a local stdio or SSH bridge. A private Tailscale HTTPS endpoint
+requires a client with tailnet access; cloud clients may need a separately
+configured public HTTPS endpoint. An existing trusted HTTPS reverse proxy can
+also be verified by opening Settings at its address.
 
 ## Scope and review model
 
