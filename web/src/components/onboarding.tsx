@@ -5,6 +5,7 @@ import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { api, type Job, type LabSettings, type McpIntegration, type ProviderConfig, type SettingsOverview } from "@/lib/api";
 import { connectOnboardingProvider, initialSetupStep, openRouterEndpoint, openRouterFreeModel, readinessLabel, readinessStep, setupSteps, type InstallationOverview, type InstallationPolicy, type NetworkSettings, type OnboardingState } from "@/lib/onboarding";
 import styles from "./onboarding.module.css";
+import { OnboardingHostSetup } from "./onboarding-host-setup";
 
 async function loadSetup() {
   const [next, settings, install, integration] = await Promise.all([
@@ -28,13 +29,13 @@ export function Onboarding() {
   const [name, setName] = useState("");
   const [units, setUnits] = useState<"metric" | "imperial">("metric");
   const [url, setUrl] = useState("");
+  const [secureBrowser, setSecureBrowser] = useState(false);
   const [provider, setProvider] = useState<ProviderConfig | null>(null);
   const [endpoint, setEndpoint] = useState("");
   const [model, setModel] = useState("");
   const [key, setKey] = useState("");
   const [models, setModels] = useState<string[]>([]);
   const [kicad, setKicad] = useState("");
-  const [installGuide, setInstallGuide] = useState<"kicad" | "tailscale" | null>(null);
   const running = useRef(false);
   const aiDirty = endpoint !== (provider?.base_url ?? "") || model !== (provider?.model ?? "") || !!key;
   const aiKeyStored = provider?.has_api_key && provider.base_url === endpoint;
@@ -54,6 +55,7 @@ export function Onboarding() {
         setState(next); setOverview(settings); setInstallation(install);
         setStep(initialSetupStep(next)); setName(settings.lab.name); setUnits(settings.lab.units);
         setUrl(next.network.public_url ?? window.location.origin); setPolicy(install.policy);
+        setSecureBrowser(window.location.protocol === "https:");
         setKicad(settings.kicad.cli_path ?? ""); setProvider(ai);
         setEndpoint(ai?.base_url ?? ""); setModel(ai?.model ?? ""); setMcp(integration);
       }).catch((failure: Error) => { if (!cancelled) setError(failure.message); });
@@ -65,6 +67,12 @@ export function Onboarding() {
     const timer = window.setInterval(() => { void refresh().catch((failure: Error) => setError(failure.message)); }, 10000);
     return () => window.clearInterval(timer);
   }, [step, refresh]);
+
+  useEffect(() => {
+    if (window.matchMedia("(max-width: 600px)").matches) {
+      document.querySelector('nav[aria-label="Setup steps"] [aria-current="step"]')?.scrollIntoView({ block: "nearest", inline: "center" });
+    }
+  }, [step]);
 
   async function run(action: () => Promise<void>) {
     if (running.current) return;
@@ -112,7 +120,7 @@ export function Onboarding() {
       setError("Your AI changes are not saved. Choose Connect and continue, or Skip AI to discard them.");
       return;
     }
-    setStep(index); setError(""); setMessage(""); setInstallGuide(null);
+    setStep(index); setError(""); setMessage("");
   }
 
   async function copy(value: string) {
@@ -121,8 +129,8 @@ export function Onboarding() {
     setMessage("Copied. Follow the instructions below to finish connecting.");
   }
 
-  async function checkKicad() {
-    const cli = kicad.trim() || "kicad-cli";
+  async function checkKicad(installedCli?: string) {
+    const cli = installedCli ?? (kicad.trim() || "kicad-cli");
     await api("/settings/kicad", { method: "PUT", body: JSON.stringify({ cli_path: cli }) });
     setKicad(cli);
     let job = await api<Job>("/settings/kicad/check", { method: "POST" });
@@ -133,13 +141,13 @@ export function Onboarding() {
     setMessage(job.status === "completed" && job.result?.status === "available"
       ? `KiCad detected: ${String(job.result.version ?? "available")}`
       : ["queued", "running"].includes(job.status) ? "Still checking. Refresh readiness later; this optional check does not block setup."
-      : "KiCad is unavailable. Use the install guide to add it inside the worker container, then check again.");
+      : "KiCad is unavailable. Install the signed KiCad worker above, then check again.");
   }
 
   return <main className={styles.page}>
     <header className={styles.header}><Link href="/" className="brand">OpenLab</Link><Link href="/settings">Settings</Link></header>
     <div className={styles.intro}><p className="eyebrow">YOUR LAB. YOUR SERVER. YOUR DATA.</p><h1>Let’s get your lab ready.</h1><p>Set up the essentials, then choose your optional tools. AI, KiCad, remote access, and Product MCP can all be added later.</p></div>
-    <nav className={styles.steps} aria-label="Setup steps">{setupSteps.map((label, index) => <button type="button" key={label} aria-current={step === index ? "step" : undefined} disabled={busy || !state} onClick={() => navigate(index)}><span>{index + 1}</span>{label}</button>)}</nav>
+    <div className={styles.workspace}><aside className={styles.sidebar}><nav className={styles.steps} aria-label="Setup steps">{setupSteps.map((label, index) => <button type="button" key={label} aria-current={step === index ? "step" : undefined} disabled={busy || !state} onClick={() => navigate(index)}><span>{index + 1}</span>{label}</button>)}</nav></aside><div className={styles.stepContent}>
     <p className={styles.progress}>Step {step + 1} of {setupSteps.length} · {setupSteps[step]}</p>
     {error && <p className={styles.error} role="alert">{error} <button type="button" disabled={busy} onClick={() => void run(async () => { await refresh(); })}>Retry checks</button></p>}
     {message && <p className={styles.message} role="status">{message}</p>}
@@ -176,27 +184,18 @@ export function Onboarding() {
       {step === 3 && <>
         <p className="eyebrow">04 · OPTIONAL KICAD</p><h2>Check your wired connections.</h2>
         <p>KiCad is required for electrical rules checks on schematic wiring. It can flag connection issues in the design; it cannot inspect physical wires or prove a circuit is safe. You can use inventory without it.</p>
-        <aside className={styles.callout}><strong>Install where OpenLab runs its checks</strong><p>KiCad CLI must be inside the worker container, not just on your computer. The standard image keeps it optional.</p>
-          <button type="button" disabled={busy} aria-expanded={installGuide === "kicad"} aria-controls="kicad-install" onClick={() => setInstallGuide(installGuide === "kicad" ? null : "kicad")}>Install KiCad and connect…</button>
-        </aside>
-        {installGuide === "kicad" && <div id="kicad-install" className={styles.guide}>
-          <h3>Install on the OpenLab host</h3>
-          {installation?.managed ? <p>This signed-release installation needs a worker image containing KiCad. Ask your installation administrator to supply a supported image; installing on the host alone will not connect it. The web app cannot change signed release images.</p> : <><ol><li>In the OpenLab source checkout on your Linux host, set <code>OPENLAB_INSTALL_KICAD=1</code> in the root <code>.env</code> file.</li><li>Run this command from that checkout. It installs KiCad in a rebuilt worker image and restarts the worker; downloads may take several minutes.</li></ol><code className={styles.command}>sh deploy/up.sh --build --no-deps -d openlab-worker</code><div className={styles.actions}><button type="button" className="secondary-button" disabled={busy} onClick={() => void run(() => copy("sh deploy/up.sh --build --no-deps -d openlab-worker"))}>Copy installation command</button></div></>}
-          <p>After installation finishes, use <strong>Connect KiCad</strong> below to save the executable and check its version. Opening this guide does not run commands on the host.</p>
-        </div>}
-        <form className="settings-form" onSubmit={(event) => submit(event, checkKicad)}><label>Worker executable<input disabled={busy} value={kicad} onChange={(event) => setKicad(event.target.value)} placeholder="kicad-cli" maxLength={500} /></label><div className={styles.actions}><button disabled={busy}>{busy ? "Checking…" : "Connect KiCad"}</button><button type="button" className="secondary-button" disabled={busy} onClick={() => navigate(4)}>{overview?.kicad.check_status === "available" ? "Continue" : "Skip for now"}</button></div></form>
-        <p className={styles.note}>Worker status: {overview?.kicad.check_status?.replaceAll("_", " ") ?? "not checked"}{overview?.kicad.version ? ` · ${overview.kicad.version}` : ""}</p>
+        <OnboardingHostSetup kind="kicad" managed={!!installation?.managed} onConnected={() => run(() => checkKicad("kicad-cli"))} />
+        <details className={styles.advanced}><summary>Already installed? Check an existing worker</summary>
+          {!installation?.managed && <p>For a source checkout, set <code>OPENLAB_INSTALL_KICAD=1</code> in <code>.env</code> and run <code>sh deploy/up.sh --build --no-deps -d openlab-worker</code>.</p>}
+          <form className="settings-form" onSubmit={(event) => submit(event, checkKicad)}><label>Worker executable<input disabled={busy} value={kicad} onChange={(event) => setKicad(event.target.value)} placeholder="kicad-cli" maxLength={500} /></label><button disabled={busy}>{busy ? "Checking…" : "Check existing KiCad"}</button></form>
+        </details>
+        <p className={styles.status}>KiCad check: <strong>{overview?.kicad.check_status?.replaceAll("_", " ") ?? "not checked"}{overview?.kicad.version ? ` · ${overview.kicad.version}` : ""}</strong></p>
+        <div className={styles.stepFooter}><span>You can add KiCad later.</span><button type="button" className="secondary-button" disabled={busy} onClick={() => navigate(4)}>{overview?.kicad.check_status === "available" ? "Continue" : "Skip for now"}</button></div>
       </>}
-      {step === 4 && <><p className="eyebrow">05 · ACCESS & UPDATES</p><h2>Your lab, wherever you are.</h2><h3>Optional Tailscale</h3>
-        <p>Tailscale gives your devices private remote access to OpenLab. Install it on the lab host and the devices you want to connect. No public port forwarding is needed.</p>
-        <p className={styles.status}>Host status: <strong>{installation?.status_stale ? "Unknown — installer status is stale" : installation?.status?.tailscale.replaceAll("_", " ") ?? "Not reported by this installation"}</strong></p>
-        <div className={styles.actions}><button type="button" disabled={busy} aria-expanded={installGuide === "tailscale"} aria-controls="tailscale-install" onClick={() => setInstallGuide(installGuide === "tailscale" ? null : "tailscale")}>Install Tailscale and connect…</button><button type="button" className="secondary-button" disabled={busy} onClick={() => { setInstallGuide(null); setMessage("Tailscale setup skipped; any existing connection is unchanged. Review security updates below, then continue."); document.getElementById("security-updates")?.scrollIntoView({ behavior: "smooth", block: "start" }); }}>Skip Tailscale</button></div>
-        {installGuide === "tailscale" && <div id="tailscale-install" className={styles.guide}>
-          <h3>Install and authorize on the host</h3>
-          {installation?.managed ? <><p>Run this command in a terminal on your OpenLab host, or ask your connected installer MCP to configure Tailscale with dependency installation enabled.</p><code className={styles.command}>openlabctl network tailscale --install-deps</code><div className={styles.actions}><button type="button" className="secondary-button" disabled={busy} onClick={() => void run(() => copy("openlabctl network tailscale --install-deps"))}>Copy installation command</button></div><p>Open the authorization URL returned in the terminal and sign in yourself. Then rerun the command to connect OpenLab to your tailnet.</p></> : <><p>This installation is not managed by openlabctl. Open Tailscale’s installer for your host, install it there, then run <code>sudo tailscale up</code> on Linux and follow its sign-in link.</p><a className={styles.buttonLink} href="https://tailscale.com/download" target="_blank" rel="noreferrer">Open Tailscale installer ↗</a><p>Visit OpenLab using the host’s Tailscale address and your existing port. This wizard cannot verify unmanaged host status.</p></>}
-          <p>The browser cannot install host software directly. Complete the terminal authorization first, then refresh. Never paste authorization links or credentials into chat.</p>
-          <div className={styles.actions}><button type="button" disabled={busy} onClick={() => void run(async () => { const { install } = await refresh(); setMessage(!install.status_stale && install.status?.tailscale === "connected" ? "The installer reports Tailscale connected. Verify access from your other device." : "Connection is not verified yet. Complete the host installation and authorization first."); })}>Check Tailscale connection</button><button type="button" className="secondary-button" disabled={busy} onClick={() => navigate(1)}>Update my lab address</button></div>
-        </div>}
+      {step === 4 && <><p className="eyebrow">05 · ACCESS & UPDATES</p><h2>Your lab, wherever you are.</h2>
+        <p>Connect privately from your own devices, then choose when OpenLab may install security updates.</p>
+        <OnboardingHostSetup kind="tailscale" managed={!!installation?.managed} />
+        <div className={styles.actions}><button type="button" className="secondary-button" onClick={() => { document.getElementById("security-updates")?.scrollIntoView({ behavior: "smooth", block: "start" }); setMessage("Tailscale skipped. Existing connections are unchanged."); }}>Skip Tailscale</button></div>
         <h3 id="security-updates">Security updates</h3>
         {installation?.managed ? <form className="settings-form" onSubmit={(event) => submit(event, async () => { await api("/settings/installation", { method: "PUT", body: JSON.stringify(policy) }); setStep(5); })}>
           <label className="check-row"><input type="checkbox" checked={policy.security_updates} onChange={(event) => setPolicy({ ...policy, security_updates: event.target.checked })} />Install eligible signed security releases automatically</label>
@@ -211,7 +210,15 @@ export function Onboarding() {
         <p>Product MCP lets an approved AI client work with your lab records. It is separate from the installer MCP: it does not install software, run shell commands, or expose provider keys. You choose permissions during authorization.</p>
         <p className={styles.status}>Status: <strong>{!mcp?.enabled ? "Disabled" : mcp.grants?.some((grant) => grant.last_used_at) ? "Enabled · client use recorded" : mcp.grants?.length ? "Enabled · client authorized, not yet used" : "Enabled · waiting for client authorization"}</strong></p>
         <div className={styles.actions}><button type="button" disabled={busy || !!mcp?.enabled} onClick={() => void run(async () => { setMcp(await api<McpIntegration>("/integrations/mcp", { method: "PUT", body: JSON.stringify({ enabled: true }) })); setMessage("Product MCP enabled. Add the endpoint in your AI client, then authorize it. Enabling alone does not connect a client."); })}>{mcp?.enabled ? "Product MCP enabled" : "Enable Product MCP"}</button><button type="button" className="secondary-button" disabled={busy} onClick={() => void run(async () => { setMcp(await api<McpIntegration>("/integrations/mcp")); })}>Check client connection</button></div>
-        {mcp?.direct_http_ready && mcp.mcp_url ? <div className={styles.guide}><h3>Connect your AI client</h3><ol><li>Add a remote MCP server in a client that supports Streamable HTTP and OAuth.</li><li>Use this server URL, then sign in to OpenLab in the authorization window.</li><li>Review the requested scopes and approve only the access you want to grant.</li></ol><code className={styles.command}>{mcp.mcp_url}</code><button type="button" className="secondary-button" disabled={busy} onClick={() => void run(() => copy(mcp.mcp_url!))}>Copy MCP server URL</button></div> : <aside className={styles.callout}><strong>HTTPS is needed for a direct connection</strong><p>Your current lab address is not eligible for direct MCP transport. Configure HTTPS for the lab first, then update its address in the Network step. Do not expose the plain HTTP application port to the internet.</p><button type="button" className="secondary-button" disabled={busy} onClick={() => navigate(1)}>Review network address</button></aside>}
+        {mcp?.direct_http_ready && mcp.mcp_url ? <div className={styles.guide}><h3>Connect your AI client</h3><ol><li>Add a remote MCP server in a client that supports Streamable HTTP and OAuth.</li><li>Use this server URL, then sign in to OpenLab in the authorization window.</li><li>Review the requested scopes and approve only the access you want to grant.</li></ol><code className={styles.command}>{mcp.mcp_url}</code><button type="button" className="secondary-button" disabled={busy} onClick={() => void run(() => copy(mcp.mcp_url!))}>Copy MCP server URL</button></div> : <>
+          <OnboardingHostSetup kind="https" managed={!!installation?.managed} />
+          <div className={styles.actions}>{secureBrowser && <button type="button" className="secondary-button" disabled={busy} onClick={() => void run(async () => {
+            if (window.location.protocol !== "https:") throw new Error("Open the secure HTTPS address first, sign in, and return to this step.");
+            const saved = await api<NetworkSettings>("/settings/network", { method: "PUT", body: JSON.stringify({ public_url: window.location.origin }) });
+            if (!saved.verified) throw new Error("This address could not be verified. Check your reverse proxy and try again.");
+            setUrl(saved.public_url ?? window.location.origin); setMessage("Secure lab address verified. You can now add the MCP URL to your client.");
+          })}>Use this HTTPS address</button>}<button type="button" className="secondary-button" disabled={busy} onClick={() => navigate(1)}>Configure another address</button></div>
+        </>}
         {!!mcp?.grants?.length && <ul className={styles.grants}>{mcp.grants?.map((grant) => <li key={grant.id}><strong>{grant.client_name}</strong><span>{grant.scopes.join(", ")} · {grant.last_used_at ? `Last used ${new Date(grant.last_used_at).toLocaleString()}` : "Authorized, not yet used"}</span></li>)}</ul>}
         <p className={styles.note}>Manage permissions or revoke clients in <Link href="/settings#mcp">Settings → MCP integrations</Link>. Skipping leaves your current MCP settings unchanged.</p>
         <div className={styles.actions}><button type="button" disabled={busy} onClick={() => navigate(readinessStep)}>{mcp?.enabled ? "Continue to readiness" : "Skip for now"}</button></div>
@@ -222,6 +229,7 @@ export function Onboarding() {
         <p className={styles.note}>Optional warnings do not block your lab. You can revisit this guide from Settings at any time.</p>
       </>}
     </section>}
+    </div></div>
     <footer className={styles.footer}>Need help? Run <code>openlabctl doctor</code> or ask your installer MCP to inspect the installation. Diagnostics redact secrets.</footer>
   </main>;
 }

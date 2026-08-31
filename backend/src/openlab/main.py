@@ -34,6 +34,13 @@ from .alternatives import create_build_from_alternative
 from .config import get_settings
 from .db import get_db
 from .enrichment import enrich_thing, queue_thing_enrichment
+from .host_setup import (
+    HostSetupInput,
+    HostSetupOperation,
+    HostSetupOut,
+    host_setup_status,
+    queue_host_setup,
+)
 from .installation import (
     InstallationOverview,
     InstallationPolicy,
@@ -252,7 +259,8 @@ def get_mcp_integration(user: User = Depends(require_owner), db: Session = Depen
     ).all()
     return {
         "enabled": lab.mcp_enabled,
-        "direct_http_ready": canonical_mcp_url(lab.public_url or settings.public_url) is not None,
+        "direct_http_ready": canonical_mcp_url(lab.public_url or settings.public_url) is not None
+            and bool(lab.public_url_verified_at if lab.public_url else settings.public_url),
         "mcp_url": canonical_mcp_url(lab.public_url or settings.public_url),
         "grants": [mcp_grant_out(db, grant) for grant in grants],
     }
@@ -716,6 +724,28 @@ def save_network_settings(payload: NetworkInput, request: Request,
 def get_installation_settings(response: Response, user: User = Depends(require_owner)) -> InstallationOverview:
     response.headers["Cache-Control"] = "private, no-store"
     return installation_overview(settings)
+
+
+@app.get("/api/v1/settings/host-setup", response_model=HostSetupOut, operation_id="get_host_setup")
+def get_host_setup(response: Response, user: User = Depends(require_owner)) -> HostSetupOut:
+    response.headers["Cache-Control"] = "private, no-store"
+    return host_setup_status(settings)
+
+
+@app.post("/api/v1/settings/host-setup", response_model=HostSetupOperation, status_code=202,
+          dependencies=[Depends(require_csrf)], operation_id="request_host_setup")
+def request_host_setup(payload: HostSetupInput, user: User = Depends(require_owner),
+                       db: Session = Depends(get_db)) -> HostSetupOperation:
+    try:
+        operation = queue_host_setup(settings, payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except OSError as exc:
+        raise HTTPException(status_code=409, detail="The host setup queue is not writable. Check installer diagnostics.") from exc
+    audit(db, user, "installation.host_setup_requested", "lab", lab_for_user(db, user),
+          setup_action=payload.action, request_id=operation.id)
+    db.commit()
+    return operation
 
 
 @app.put("/api/v1/settings/installation", response_model=InstallationOverview,

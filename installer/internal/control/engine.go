@@ -35,9 +35,20 @@ type Config struct {
 	SchemaRevision string `json:"schema_revision"`
 	SourceMode     bool   `json:"source_mode"`
 	TailscaleIP    string `json:"tailscale_ip,omitempty"`
+	KicadEnabled   bool   `json:"kicad_enabled,omitempty"`
+}
+
+func (c Config) WorkerImage() string {
+	if c.KicadEnabled {
+		return c.Images.KicadWorker
+	}
+	return c.Images.Server
 }
 
 func (c Config) Validate() error {
+	if c.KicadEnabled && c.Images.KicadWorker == "" {
+		return errors.New("enabled KiCad requires a signed worker image")
+	}
 	if c.SchemaVersion != 1 || (!ValidRelease(c.Version) && !c.SourceMode) || !regexp.MustCompile(`^[a-z][a-z0-9_-]{0,39}$`).MatchString(c.Project) {
 		return errors.New("invalid installation configuration")
 	}
@@ -71,6 +82,8 @@ type Engine struct {
 	// Progress is terminal-only, fixed text emitted by lifecycle operations.
 	// It must never include command output, configuration, or credentials.
 	Progress func(string)
+	// Detail updates the current line; subprocess text is redacted before this callback.
+	Detail func(string)
 	// Private dependency seams for disposable lifecycle fault-injection tests.
 	fetchRelease  func(context.Context, string, string) (Manifest, []byte, error)
 	downloadAsset func(context.Context, string, int64) ([]byte, error)
@@ -80,6 +93,12 @@ type Engine struct {
 func (e *Engine) progress(message string) {
 	if e.Progress != nil {
 		e.Progress(message)
+	}
+}
+
+func (e *Engine) detail(message string) {
+	if e.Detail != nil {
+		e.Detail(message)
 	}
 }
 
@@ -106,7 +125,7 @@ func (e *Engine) runner() Runner {
 			secrets = append(secrets, values[key])
 		}
 	}
-	return SystemRunner{Secrets: secrets}
+	return SystemRunner{Secrets: secrets, Progress: e.Detail}
 }
 func trustedPath(path string) error {
 	for current := filepath.Clean(path); current != "/"; current = filepath.Dir(current) {
@@ -172,8 +191,8 @@ func (e *Engine) compose(ctx context.Context, timeout time.Duration, config Conf
 }
 
 func (e *Engine) composeProgress(ctx context.Context, timeout time.Duration, config Config, args ...string) ([]byte, error) {
-	// Compose's plain mode is stable over SSH/non-TTY sessions and exposes
-	// layer/service events that RunProgress can safely redact and forward.
+	// Parse plain events into our own display: Docker's ANSI stream cannot be
+	// forwarded safely through redaction or the helper's JSON protocol.
 	for _, path := range []string{AppRoot + "/deploy/compose.yml", AppRoot + "/deploy/compose.installer.yml", ConfigRoot + "/network.yml", ConfigRoot + "/openlab.env"} {
 		if _, err := trustedFile(path); err != nil {
 			return nil, err
@@ -342,6 +361,9 @@ func (e *Engine) Doctor(ctx context.Context, publish bool) (Report, error) {
 				running = running && strings.Contains(string(state), "healthy") && !strings.Contains(string(state), "unhealthy")
 			}
 			expected := config.Images.Server
+			if service == "openlab-worker" {
+				expected = config.WorkerImage()
+			}
 			if service == "postgres" {
 				expected = config.Images.Postgres
 			}
@@ -353,6 +375,7 @@ func (e *Engine) Doctor(ctx context.Context, publish bool) (Report, error) {
 			imageMatches = actualErr == nil && wantedErr == nil && bytes.Equal(bytes.TrimSpace(actual), bytes.TrimSpace(wanted))
 		}
 		checks = append(checks, NewCheck(strings.ReplaceAll(service, "-", "_"), service, true, running && imageMatches, "SERVICE_NOT_READY", "Service state and image identity must match the installed release.", "openlabctl logs --service "+service))
+		e.detail(readinessProgress(checks))
 	}
 	endpoint := "http://" + net.JoinHostPort(config.BindAddress, strconv.Itoa(config.Port))
 	client := &http.Client{Timeout: 5 * time.Second, CheckRedirect: func(_ *http.Request, _ []*http.Request) error { return http.ErrUseLastResponse }}
@@ -371,6 +394,7 @@ func (e *Engine) Doctor(ctx context.Context, publish bool) (Report, error) {
 			response.Body.Close()
 		}
 		checks = append(checks, NewCheck(route.id, "HTTP "+route.path, true, ok, "HTTP_NOT_READY", "The application route must answer with the expected status.", "openlabctl logs --service openlab-web"))
+		e.detail(readinessProgress(checks))
 	}
 	heartbeatCode := "import json; from datetime import UTC,datetime; from sqlalchemy import select; from openlab.db import SessionLocal; from openlab.models import ServiceHeartbeat; from openlab.config import get_settings; db=SessionLocal(); row=db.scalar(select(ServiceHeartbeat).where(ServiceHeartbeat.service=='worker').order_by(ServiceHeartbeat.last_seen_at.desc()).limit(1)); print(json.dumps({'ready':bool(row and row.version==get_settings().version and 0 <= (datetime.now(UTC)-row.last_seen_at).total_seconds() <= 60)})); db.close()"
 	heartbeat := []byte(nil)
@@ -386,9 +410,10 @@ func (e *Engine) Doctor(ctx context.Context, publish bool) (Report, error) {
 	}
 	healthyWorker := heartbeatErr == nil && json.Unmarshal(heartbeat, &heartbeatResult) == nil && heartbeatResult.Ready
 	checks = append(checks, NewCheck("worker_heartbeat", "Worker heartbeat", true, healthyWorker, "WORKER_UNAVAILABLE", "A matching worker must report within 60 seconds.", "openlabctl repair worker"))
+	e.detail(readinessProgress(checks))
 	report := Summarize(checks, config.Version)
 	if publish {
-		if err = e.publishStatus(report, "", ""); err != nil {
+		if err = e.publishStatus(report, e.tailscaleState(ctx), ""); err != nil {
 			return report, err
 		}
 	}
@@ -396,7 +421,7 @@ func (e *Engine) Doctor(ctx context.Context, publish bool) (Report, error) {
 }
 
 func (e *Engine) publishStatus(report Report, tailscale, update string) error {
-	previous := Status{Tailscale: "not_installed", UpdateStatus: "idle"}
+	previous := Status{Tailscale: "unavailable", UpdateStatus: "idle"}
 	if data, err := os.ReadFile(StateRoot + "/control/status.json"); err == nil {
 		_ = DecodeStrict(data, &previous)
 	}
@@ -415,31 +440,32 @@ func (e *Engine) waitReady(ctx context.Context) (Report, error) {
 	if e.probeReady != nil {
 		return e.probeReady(ctx)
 	}
-	const readinessWindow = 5 * time.Minute
-	started := time.Now()
-	deadline := started.Add(readinessWindow)
-	lastProgress := time.Time{}
+	return e.waitForReadiness(ctx, 5*time.Minute, func(ctx context.Context) (Report, error) { return e.Doctor(ctx, true) })
+}
+
+func (e *Engine) waitForReadiness(ctx context.Context, readinessWindow time.Duration, probe func(context.Context) (Report, error)) (Report, error) {
+	ctx, cancel := context.WithTimeout(ctx, readinessWindow)
+	defer cancel()
+	e.progress("Readiness")
+	e.detail(readinessProgress(nil))
 	var report Report
-	for time.Now().Before(deadline) {
-		next, err := e.Doctor(ctx, true)
+	for ctx.Err() == nil {
+		next, err := probe(ctx)
 		report = next
-		if err == nil && report.Overall != "blocked" {
-			e.progress("Services are ready. Continue with the browser setup link when it is printed.")
+		if err == nil && ctx.Err() == nil && (report.Overall == "ready" || report.Overall == "ready_with_warnings") {
+			e.progress("Services ready")
 			return report, nil
 		}
-		if lastProgress.IsZero() || time.Since(lastProgress) >= 15*time.Second {
-			elapsed := time.Since(started)
-			filled := min(20, int(elapsed*20/readinessWindow))
-			e.progress(fmt.Sprintf("Checking service readiness [%s%s] %ds elapsed. This checks startup only; it does not wait for browser setup.", strings.Repeat("=", filled), strings.Repeat(".", 20-filled), int(elapsed.Seconds())))
-			lastProgress = time.Now()
-		}
+		e.detail(readinessProgress(report.Checks))
 		select {
 		case <-ctx.Done():
-			return report, ctx.Err()
 		case <-time.After(3 * time.Second):
 		}
 	}
-	e.progress("Readiness did not complete within five minutes. Run openlabctl doctor for the exact failed check.")
+	if ctx.Err() == context.Canceled {
+		return report, ctx.Err()
+	}
+	e.progress("Readiness timed out; run openlabctl doctor")
 	return report, Fail("READINESS_TIMEOUT", "OpenLab did not become ready within five minutes.", "openlabctl doctor")
 }
 

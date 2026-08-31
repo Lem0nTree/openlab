@@ -973,6 +973,138 @@
         }
       }
     },
+    "/api/v1/settings/host-setup": {
+      "get": {
+        "summary": "Get Host Setup",
+        "operationId": "get_host_setup",
+        "parameters": [
+          {
+            "name": "openlab_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Openlab Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HostSetupOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Request Host Setup",
+        "operationId": "request_host_setup",
+        "parameters": [
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          },
+          {
+            "name": "openlab_csrf",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Openlab Csrf"
+            }
+          },
+          {
+            "name": "openlab_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Openlab Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HostSetupInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HostSetupOperation"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/settings/lab": {
       "put": {
         "summary": "Save Lab Settings",
@@ -6477,6 +6609,137 @@
         "type": "object",
         "title": "HTTPValidationError"
       },
+      "HostSetupInput": {
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": [
+              "refresh",
+              "kicad",
+              "tailscale",
+              "https"
+            ],
+            "title": "Action"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "action"
+        ],
+        "title": "HostSetupInput"
+      },
+      "HostSetupOperation": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{32}$",
+            "title": "Id"
+          },
+          "action": {
+            "type": "string",
+            "enum": [
+              "refresh",
+              "kicad",
+              "tailscale",
+              "https"
+            ],
+            "title": "Action"
+          },
+          "requested_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Requested At"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "queued",
+              "running",
+              "completed",
+              "failed"
+            ],
+            "title": "Status"
+          },
+          "message": {
+            "type": "string",
+            "maxLength": 1000,
+            "title": "Message"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^https://[a-z0-9-]+\\.[a-z0-9-]+\\.ts\\.net$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Url"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "action",
+          "requested_at",
+          "status",
+          "message"
+        ],
+        "title": "HostSetupOperation"
+      },
+      "HostSetupOut": {
+        "properties": {
+          "available": {
+            "type": "boolean",
+            "title": "Available",
+            "default": false
+          },
+          "checked_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Checked At"
+          },
+          "tailscale": {
+            "type": "string",
+            "enum": [
+              "not_installed",
+              "needs_authorization",
+              "connected",
+              "unavailable"
+            ],
+            "title": "Tailscale",
+            "default": "unavailable"
+          },
+          "kicad_supported": {
+            "type": "boolean",
+            "title": "Kicad Supported",
+            "default": false
+          },
+          "operation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/HostSetupOperation"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "HostSetupOut"
+      },
       "InboxCandidateBatchConfirm": {
         "properties": {
           "candidate_ids": {
@@ -6954,7 +7217,7 @@
               "unavailable"
             ],
             "title": "Tailscale",
-            "default": "not_installed"
+            "default": "unavailable"
           },
           "update_status": {
             "type": "string",

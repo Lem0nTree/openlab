@@ -214,6 +214,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/settings/host-setup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Host Setup */
+        get: operations["get_host_setup"];
+        put?: never;
+        /** Request Host Setup */
+        post: operations["request_host_setup"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/settings/lab": {
         parameters: {
             query?: never;
@@ -1269,6 +1287,60 @@ export interface components {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
         };
+        /** HostSetupInput */
+        HostSetupInput: {
+            /**
+             * Action
+             * @enum {string}
+             */
+            action: "refresh" | "kicad" | "tailscale" | "https";
+        };
+        /** HostSetupOperation */
+        HostSetupOperation: {
+            /** Id */
+            id: string;
+            /**
+             * Action
+             * @enum {string}
+             */
+            action: "refresh" | "kicad" | "tailscale" | "https";
+            /**
+             * Requested At
+             * Format: date-time
+             */
+            requested_at: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "queued" | "running" | "completed" | "failed";
+            /** Message */
+            message: string;
+            /** Url */
+            url?: string | null;
+        };
+        /** HostSetupOut */
+        HostSetupOut: {
+            /**
+             * Available
+             * @default false
+             */
+            available: boolean;
+            /** Checked At */
+            checked_at?: string | null;
+            /**
+             * Tailscale
+             * @default unavailable
+             * @enum {string}
+             */
+            tailscale: "not_installed" | "needs_authorization" | "connected" | "unavailable";
+            /**
+             * Kicad Supported
+             * @default false
+             */
+            kicad_supported: boolean;
+            operation?: components["schemas"]["HostSetupOperation"] | null;
+        };
         /** InboxCandidateBatchConfirm */
         InboxCandidateBatchConfirm: {
             /** Candidate Ids */
@@ -1417,7 +1489,7 @@ export interface components {
             checks: components["schemas"]["ReadinessCheck"][];
             /**
              * Tailscale
-             * @default not_installed
+             * @default unavailable
              * @enum {string}
              */
             tailscale: "not_installed" | "needs_authorization" | "connected" | "unavailable";
@@ -2693,6 +2765,75 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["InstallationOverview"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_host_setup: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                openlab_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HostSetupOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    request_host_setup: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                openlab_csrf?: string | null;
+                openlab_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["HostSetupInput"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HostSetupOperation"];
                 };
             };
             /** @description Validation Error */

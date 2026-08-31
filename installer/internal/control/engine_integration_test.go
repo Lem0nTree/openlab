@@ -103,6 +103,7 @@ func TestDisposableLifecycle(t *testing.T) {
 	hash := sha256.Sum256(bundle)
 	public, private, _ := ed25519.GenerateKey(rand.Reader)
 	manifest := testManifest()
+	manifest.Images.KicadWorker = "ghcr.io/lem0ntree/openlab-worker-kicad@sha256:" + strings.Repeat("d", 64)
 	manifest.BundleSHA256 = hex.EncodeToString(hash[:])
 	manifest.RollbackCompatibleSchemas = []string{manifest.SchemaRevision}
 	runner := &lifecycleRunner{}
@@ -188,6 +189,57 @@ func TestDisposableLifecycle(t *testing.T) {
 			}
 		}
 	})
+	t.Run("KiCad readiness failure restores the previous worker", func(t *testing.T) {
+		config, _ := loadConfig()
+		previous, _ := trustedFile(ConfigRoot + "/openlab.env")
+		probe := engine.probeReady
+		engine.probeReady = func(context.Context) (Report, error) { return Report{}, errors.New("injected KiCad readiness failure") }
+		defer func() { engine.probeReady = probe }()
+		if err := engine.installKicad(ctx, config); SafeError(err).Code != "KICAD_INSTALL_FAILED" {
+			t.Fatal(err)
+		}
+		after, _ := trustedFile(ConfigRoot + "/openlab.env")
+		current, _ := loadConfig()
+		if !bytes.Equal(previous, after) || current.KicadEnabled {
+			t.Fatal("failed KiCad activation changed configuration")
+		}
+	})
+	t.Run("owner setup selects signed KiCad worker and preserves secrets", func(t *testing.T) {
+		request := SetupRequest{ID: strings.Repeat("a", 32), Action: "kicad", RequestedAt: time.Now().UTC()}
+		data, _ := json.Marshal(request)
+		if err := AtomicWrite(StateRoot+"/control/policy/setup-request.json", data, 0600); err != nil {
+			t.Fatal(err)
+		}
+		result, err := engine.ProcessSetup(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		status := result.(SetupStatus)
+		if status.Operation.Status != "completed" {
+			t.Fatal(status.Operation)
+		}
+		current, _ := loadConfig()
+		values, _ := readEnvironment()
+		if !current.KicadEnabled || values["OPENLAB_WORKER_IMAGE"] != manifest.Images.KicadWorker || values["OPENLAB_SERVER_IMAGE"] != manifest.Images.Server {
+			t.Fatal("wrong image activated")
+		}
+		if values["OPENLAB_ENCRYPTION_KEY"] != before["OPENLAB_ENCRYPTION_KEY"] {
+			t.Fatal("secrets changed")
+		}
+		// Replaying the same request must not run Docker again.
+		if err := AtomicWrite(StateRoot+"/control/policy/setup-request.json", data, 0600); err != nil {
+			t.Fatal(err)
+		}
+		count := len(runner.calls)
+		if _, err := engine.ProcessSetup(ctx); err == nil {
+			t.Fatal("replay accepted")
+		}
+		for _, call := range runner.calls[count:] {
+			if strings.HasPrefix(call, "docker ") {
+				t.Fatal("replay ran Docker")
+			}
+		}
+	})
 	t.Run("manual feature gate", func(t *testing.T) {
 		manifest.Version = "v0.3.0"
 		manifest.Classification = "feature"
@@ -240,6 +292,9 @@ func TestDisposableLifecycle(t *testing.T) {
 		current, _ := loadConfig()
 		if current.Version != "v0.3.0" {
 			t.Fatal("new version not active")
+		}
+		if !current.KicadEnabled || current.WorkerImage() != manifest.Images.KicadWorker {
+			t.Fatal("update removed KiCad")
 		}
 	})
 	t.Run("helper protocol rejects expanded authority", func(t *testing.T) {

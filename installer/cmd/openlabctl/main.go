@@ -24,9 +24,18 @@ func main() { os.Exit(run()) }
 func run() int {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
-	engine := &control.Engine{Version: version, PublicKey: releasePublicKey, Progress: func(message string) {
-		fmt.Fprintln(os.Stderr, "OpenLab: "+message)
-	}}
+	display := control.NewTerminalProgress(os.Stderr)
+	defer display.Close()
+	humanInstall := false
+	engine := &control.Engine{Version: version, PublicKey: releasePublicKey, Progress: display.Update, Detail: display.Detail}
+	finish := func(result any, err error) int {
+		display.Close()
+		if humanInstall && err == nil && !blockedResult(result) {
+			fmt.Fprintln(os.Stdout, "OpenLab setup command completed. Run sudo openlabctl setup-link to continue.")
+			return 0
+		}
+		return printResult(result, err)
+	}
 	if filepath.Base(os.Args[0]) == "openlabctl-helper" {
 		if len(os.Args) != 1 {
 			return 2
@@ -80,7 +89,7 @@ func run() int {
 			return 2
 		}
 		result, err := engine.Adopt(ctx, *env, *project, *selected, *handover)
-		return printResult(result, err)
+		return finish(result, err)
 	}
 	if command == "install" && len(os.Args) > 2 && os.Args[2] == "--from-source" {
 		if len(os.Args) != 3 || os.Geteuid() == 0 {
@@ -124,10 +133,12 @@ func run() int {
 			result, err = engine.Doctor(ctx, true)
 		} else if os.Args[2] == "scheduled-update" {
 			result, err = engine.ScheduledUpdate(ctx)
+		} else if os.Args[2] == "setup" {
+			result, err = engine.ProcessSetup(ctx)
 		} else {
 			return 2
 		}
-		return printResult(result, err)
+		return finish(result, err)
 	}
 	flags := flag.NewFlagSet(command, flag.ContinueOnError)
 	selectedVersion := flags.String("version", "latest", "Published release version")
@@ -138,7 +149,7 @@ func run() int {
 	feature := flags.Bool("feature", false, "Explicitly approve a compatible feature update")
 	bind := flags.String("bind", "", "Private IPv4 address or 127.0.0.1")
 	port := flags.Int("port", 3000, "Unprivileged web port")
-	_ = flags.Bool("json", false, "Emit machine-readable JSON (all commands already do)")
+	jsonOutput := flags.Bool("json", false, "Emit JSON instead of the interactive installation summary")
 	args := os.Args[2:]
 	recipe := ""
 	if command == "repair" {
@@ -159,6 +170,7 @@ func run() int {
 		return 2
 	}
 	action := command
+	humanInstall = (action == "install" || action == "update") && !*jsonOutput && control.InteractiveTerminal(os.Stdout)
 	if action == "doctor" {
 		action = "status"
 	}
@@ -224,18 +236,17 @@ func run() int {
 			return failure(control.Fail("ROOT_REQUIRED", "Publishing the local status file requires sudo.", "Run sudo openlabctl doctor --write-status."))
 		}
 		result, err := engine.Doctor(ctx, true)
-		return printResult(result, err)
+		return finish(result, err)
 	}
 	if action == "inspect" {
 		result, err := engine.Handle(ctx, request)
-		return printResult(result, err)
+		return finish(result, err)
 	}
 	result, err := dispatch(request)
 	if action == "install" && control.SafeError(err).Code == "UPDATE_REQUIRED" {
-		fmt.Fprintln(os.Stderr, "A managed installation already exists; applying the explicitly selected compatible release through backup and rollback gates.")
 		result, err = dispatch(control.Request{Action: "update", Version: request.Version, ManualFeature: true})
 	}
-	return printResult(result, err)
+	return finish(result, err)
 }
 
 func printResult(result any, err error) int {
@@ -244,15 +255,19 @@ func printResult(result any, err error) int {
 		encoder.SetIndent("", "  ")
 		_ = encoder.Encode(result)
 	}
-	if err == nil {
-		if report, ok := result.(control.Report); ok && report.Overall == "blocked" {
-			return 2
-		}
-		if report, ok := result.(map[string]any); ok && report["overall"] == "blocked" {
-			return 2
-		}
+	if err == nil && blockedResult(result) {
+		return 2
 	}
 	return failure(err)
+}
+func blockedResult(result any) bool {
+	if report, ok := result.(control.Report); ok {
+		return report.Overall == "blocked"
+	}
+	if report, ok := result.(map[string]any); ok {
+		return report["overall"] == "blocked"
+	}
+	return false
 }
 func failure(err error) int {
 	if err == nil {
@@ -263,7 +278,7 @@ func failure(err error) int {
 }
 func usage() {
 	fmt.Println(`OpenLab installer and diagnostics
-  openlabctl install [--version vX.Y.Z] [--install-deps] [--bind PRIVATE_IP --port 3000]
+  openlabctl install [--version vX.Y.Z] [--install-deps] [--bind PRIVATE_IP --port 3000] [--json]
   openlabctl plan [--version vX.Y.Z] [--install-deps]
   openlabctl inspect | doctor | status | restart | backup | check-updates | update
   openlabctl logs --service openlab-worker --lines 100
@@ -276,5 +291,6 @@ func usage() {
   sudo openlabctl setup-link
   sudo openlabctl authorize
   openlabctl mcp [print-config]
-All command results are JSON; secrets are never included in diagnostics or MCP output.`)
+Install/update use short interactive summaries; --json or redirected stdout keeps JSON.
+Other lifecycle results and MCP use JSON; diagnostics never include secrets.`)
 }
