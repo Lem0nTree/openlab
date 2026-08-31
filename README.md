@@ -30,7 +30,7 @@ OpenLab connects the parts of lab work that normally live in separate apps, spre
 - **Inventory with a physical memory** — hierarchical locations, QR labels, balances, receipts, moves, usage, and an auditable movement history.
 - **Inventory-grounded BUILD** — search by capability, compare owned-item combinations, expose missing requirements, and allocate real stock deliberately.
 - **Safer wiring proposals** — sourced pin records, deterministic electrical checks, downloadable KiCad schematics, and optional `kicad-cli` ERC.
-- **Local-first deployment** — run the full stack with Docker Compose, with an optional [CI-gated ARM64 build-to-Pi path](docs/AUTOMATIC_DEPLOYMENT.md).
+- **Local-first deployment** — run the full stack with Docker Compose; install published, signed packages on a Raspberry Pi with [OpenLab Installer](docs/INSTALLATION.md).
 
 ![A complete OpenLab build workspace with selected components, connection checks, instructions, allocations, and pin data](screen/buildpagedetails.png)
 
