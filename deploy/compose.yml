@@ -74,6 +74,8 @@ services:
 
   openlab-web:
     image: ${OPENLAB_WEB_IMAGE:-deploy-openlab-web:latest}
+    labels:
+      com.codex.description: "OpenLab web"
     build:
       context: ..
       dockerfile: deploy/Dockerfile.web
