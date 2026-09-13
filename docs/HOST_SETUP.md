@@ -1,7 +1,9 @@
 # Host setup from onboarding
 
-The signed Linux installer runs `openlab-setup.timer` every ten seconds on
-systemd hosts. Onboarding can ask it to refresh diagnostics, install the optional
+The signed Linux installer enables `openlab-setup.path` on systemd hosts. It
+runs the setup helper once at boot and then only when the web service atomically
+publishes an owner-approved request; it does not continuously poll. Onboarding can
+ask it to refresh diagnostics, install the optional
 KiCad worker, install/connect Tailscale, or enable private HTTPS. Source checkouts
 and older installers without this service show an explicit upgrade/manual path.
 Run the current signed bootstrap once to upgrade the CLI, helper, and services;

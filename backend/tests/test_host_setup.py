@@ -32,14 +32,27 @@ def test_request_contains_only_fixed_action_and_rejects_second_request(tmp_path:
     assert json.loads((tmp_path / "policy/setup-request.json").read_text()) == request
 
 
-def test_stale_host_is_unknown_not_not_installed(tmp_path: Path) -> None:
+def test_idle_host_marker_remains_available_but_stale_network_is_unknown(tmp_path: Path) -> None:
     settings = setup_host(tmp_path)
     assert host_setup_status(settings).tailscale == "connected"
     (tmp_path / "setup-status.json").write_text(json.dumps({
         "checked_at": (datetime.now(UTC) - timedelta(minutes=5)).isoformat(), "tailscale": "not_installed",
     }))
-    assert not host_setup_status(settings).available
+    assert host_setup_status(settings).available
     assert host_setup_status(settings).tailscale == "unavailable"
+    queued = queue_host_setup(settings, HostSetupInput(action="tailscale"))
+    assert queued.status == "queued"
+
+
+def test_stale_running_host_helper_is_unavailable(tmp_path: Path) -> None:
+    settings = setup_host(tmp_path)
+    (tmp_path / "setup-status.json").write_text(json.dumps({
+        "checked_at": (datetime.now(UTC) - timedelta(minutes=26)).isoformat(),
+        "tailscale": "connected", "kicad_supported": True,
+        "operation": {"id": "a" * 32, "action": "kicad", "requested_at": datetime.now(UTC).isoformat(),
+                      "status": "running", "message": "Downloading"},
+    }))
+    assert not host_setup_status(settings).available
     with pytest.raises(ValueError, match="unavailable"):
         queue_host_setup(settings, HostSetupInput(action="tailscale"))
 

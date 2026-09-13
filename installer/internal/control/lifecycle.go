@@ -581,23 +581,34 @@ func tailscaleWebReady(ctx context.Context, endpoint string) bool {
 	return response.StatusCode == http.StatusOK
 }
 
-func (e *Engine) installTimers(ctx context.Context) error {
-	units := map[string]string{
-		"openlab-setup.service":           "[Unit]\nDescription=Process owner-approved OpenLab setup actions\nAfter=docker.service network-online.target\n[Service]\nType=oneshot\nExecStart=" + BinaryPath + " internal setup\nTimeoutStartSec=25min\nUMask=0077\n",
-		"openlab-setup.timer":             "[Unit]\nDescription=Refresh setup status and process requests\n[Timer]\nOnBootSec=20s\nOnUnitActiveSec=10s\nAccuracySec=1s\n[Install]\nWantedBy=timers.target\n",
+func systemdUnits() map[string]string {
+	return map[string]string{
+		"openlab-setup.service":           "[Unit]\nDescription=Process owner-approved OpenLab setup actions\nAfter=docker.service network-online.target\n[Service]\nType=oneshot\nExecStart=" + BinaryPath + " internal setup\nTimeoutStartSec=25min\nUMask=0077\n[Install]\nWantedBy=multi-user.target\n",
+		"openlab-setup.path":              "[Unit]\nDescription=Watch for owner-approved OpenLab setup actions\nStartLimitIntervalSec=60\nStartLimitBurst=3\n[Path]\nPathExists=" + StateRoot + "/control/policy/setup-request.json\nUnit=openlab-setup.service\n[Install]\nWantedBy=multi-user.target\n",
 		"openlab-status.service":          "[Unit]\nDescription=Refresh redacted OpenLab diagnostics\nAfter=docker.service\n[Service]\nType=oneshot\nExecStart=" + BinaryPath + " internal status\n",
 		"openlab-status.timer":            "[Unit]\nDescription=Refresh OpenLab diagnostics every five minutes\n[Timer]\nOnBootSec=1min\nOnUnitActiveSec=5min\n[Install]\nWantedBy=timers.target\n",
 		"openlab-security-update.service": "[Unit]\nDescription=Apply eligible OpenLab security updates during the chosen window\nAfter=docker.service network-online.target\n[Service]\nType=oneshot\nExecStart=" + BinaryPath + " internal scheduled-update\nTimeoutStartSec=30min\n",
 		"openlab-security-update.timer":   "[Unit]\nDescription=Check the local OpenLab maintenance policy\n[Timer]\nOnCalendar=*-*-* *:*:00\nAccuracySec=1s\n[Install]\nWantedBy=timers.target\n",
 	}
+}
+
+func (e *Engine) installTimers(ctx context.Context) error {
+	units := systemdUnits()
 	for name, unit := range units {
 		if err := AtomicWrite("/etc/systemd/system/"+name, []byte(unit), 0644); err != nil {
 			return err
 		}
 	}
+	// Releases before v1.0.7 polled setup state every ten seconds. The path unit
+	// wakes the helper when the web service atomically publishes a request; the
+	// enabled oneshot refreshes state once at boot.
+	_, _ = e.runner().Run(ctx, 30*time.Second, nil, "systemctl", "disable", "--now", "openlab-setup.timer")
+	if err := os.Remove("/etc/systemd/system/openlab-setup.timer"); err != nil && !os.IsNotExist(err) {
+		return err
+	}
 	if _, err := e.runner().Run(ctx, 30*time.Second, nil, "systemctl", "daemon-reload"); err != nil {
 		return err
 	}
-	_, err := e.runner().Run(ctx, 30*time.Second, nil, "systemctl", "enable", "--now", "openlab-status.timer", "openlab-security-update.timer", "openlab-setup.timer")
+	_, err := e.runner().Run(ctx, 30*time.Second, nil, "systemctl", "enable", "--now", "openlab-status.timer", "openlab-security-update.timer", "openlab-setup.service", "openlab-setup.path")
 	return err
 }
