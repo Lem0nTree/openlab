@@ -67,6 +67,22 @@ func TestTailscaleDetectionDoesNotConfuseUnavailableWithAbsent(t *testing.T) {
 		}
 	}
 }
+
+func TestSetupUsesEventDrivenPathInsteadOfPollingTimer(t *testing.T) {
+	units := systemdUnits()
+	if _, exists := units["openlab-setup.timer"]; exists {
+		t.Fatal("setup polling timer is still installed")
+	}
+	path := units["openlab-setup.path"]
+	if !strings.Contains(path, "PathExists="+StateRoot+"/control/policy/setup-request.json") ||
+		!strings.Contains(path, "Unit=openlab-setup.service") {
+		t.Fatalf("setup request path is not wired to the helper: %q", path)
+	}
+	if !strings.Contains(units["openlab-setup.service"], "WantedBy=multi-user.target") {
+		t.Fatal("setup state is not refreshed once at boot")
+	}
+}
+
 func TestSetupRejectsExpandedExpiredAndSymlinkRequests(t *testing.T) {
 	request := SetupRequest{ID: strings.Repeat("a", 32), Action: "kicad", RequestedAt: time.Now().UTC()}
 	if err := request.Validate(time.Now()); err != nil {

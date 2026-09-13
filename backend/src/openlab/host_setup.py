@@ -50,9 +50,13 @@ def host_setup_status(settings: Settings) -> HostSetupOut:
     try:
         status = HostSetupOut.model_validate_json(read_control_json(directory, "setup-status.json"))
         age = (datetime.now(UTC) - status.checked_at).total_seconds() if status.checked_at else -1
-        # Long jobs publish phase changes. Do not submit another during a running job.
-        status.available = 0 <= age <= (1500 if status.operation and status.operation.status == "running" else 90)
-        if not status.available:
+        # The host helper is event-driven: an idle status is an installation
+        # marker, while running jobs must keep publishing progress.
+        running = bool(status.operation and status.operation.status == "running")
+        status.available = age >= 0 and (not running or age <= 1500)
+        # An idle Tailscale value may be old; an explicit refresh request wakes
+        # the path unit without requiring a ten-second host poll.
+        if age < 0 or age > 90:
             status.tailscale = "unavailable"
         return status
     except (OSError, ValueError, TypeError):
